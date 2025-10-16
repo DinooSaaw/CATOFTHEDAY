@@ -1,7 +1,7 @@
 {
+  "_comment": "Cat of the Day - Twitch Channel Points Widget Configuration",
   "channel": {
-    "name": "YOUR_TWITCH_USERNAME",
-    "displayChannelName": false
+    "name": "YOUR_TWITCH_USERNAME"
   },
   "theme": {
     "colors": {
@@ -23,9 +23,7 @@
   },
   "animation": {
     "rollDuration": 5000,
-    "enableSounds": true,
-    "autoStart": false,
-    "autoStartDelay": 500
+    "enableSounds": true
   },
   "audio": {
     "rollingSound": "gamba.mp3",
@@ -62,14 +60,14 @@
     ]
   },
   "rarity": {
-    "weights": {
-      "common": 40,
-      "uncommon": 30,
-      "rare": 20,
-      "epic": 8,
-      "legendary": 2
-    },
-    "assignmentMethod": "position"
+    "_comment": "Percentage distribution for rarity assignment (must total 100)",
+    "distribution": {
+      "legendary": 2,
+      "epic": 6,
+      "rare": 12,
+      "uncommon": 25,
+      "common": 55
+    }
   },
   "display": {
     "showRarityBorders": true,
@@ -92,11 +90,8 @@
     },
     "channelPoints": {
       "enabled": true,
-      "listenToAllRewards": false,
-      "specificRewardId": "YOUR_CHANNEL_POINT_REWARD_ID",
-      "rewardTitle": "",
-      "actualRewardTitle": "CAT OF THE DAY",
-      "actualRewardId": "YOUR_CHANNEL_POINT_REWARD_ID"
+      "rewardId": "YOUR_CHANNEL_POINT_REWARD_ID",
+      "rewardTitle": "CAT OF THE DAY"
     },
     "oauth": {
       "clientId": "YOUR_TWITCH_CLIENT_ID",

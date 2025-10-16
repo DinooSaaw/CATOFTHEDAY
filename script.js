@@ -52,7 +52,7 @@ class ConfigManager {
 
     getDefaultConfig() {
         return {
-            channel: { name: "YourChannelName", displayChannelName: true },
+            channel: { name: "YourChannelName" },
             theme: {
                 colors: {
                     primary: "#1a1a1a", secondary: "#2d2d2d", tertiary: "#3d3d3d",
@@ -62,20 +62,20 @@ class ConfigManager {
                     common: "#b0b0b0", uncommon: "#5e98d9", rare: "#4b69ff", epic: "#8847ff", legendary: "#d32ce6"
                 }
             },
-            animation: { rollDuration: 4000, enableSounds: true, autoStart: true, autoStartDelay: 500 },
+            animation: { rollDuration: 4000, enableSounds: true },
             audio: { 
                 rollingSound: "gamba.mp3", 
                 winSound: { useCustom: false, customFile: "ding.mp3", volume: 0.5 }
             },
             persistence: { enableWinnerMemory: false, winnerDurationHours: 24, allowRollCommand: true, showTimeRemaining: false },
             emotes: { source: "7tv", channelName: "", globalEmotes: true, maxEmotes: 50, enableAnimated: true },
-            rarity: { weights: { common: 55, uncommon: 25, rare: 12, epic: 6, legendary: 2 }, assignmentMethod: "position" },
+            rarity: { distribution: { legendary: 2, epic: 6, rare: 12, uncommon: 25, common: 55 } },
             display: { showRarityBorders: true, showGlowEffects: true, showLoadingSpinner: true, finalEmoteSize: "large" },
             debug: { enableLogging: true, showFallbackEmotes: false },
             twitch: { 
                 enableChatCommands: false, allowModerators: true, allowBroadcaster: true, allowSubscribers: false,
-                commands: { roll: "#roll", set: "#set" },
-                channelPoints: { enabled: false, rewardTitle: "", listenToAllRewards: true, specificRewardId: "" },
+                commands: { roll: "#roll", set: "#set", reset: "#reset" },
+                channelPoints: { enabled: false, rewardId: "", rewardTitle: "" },
                 oauth: { clientId: "", accessToken: "", scopes: ["channel:read:redemptions"] }
             }
         };
@@ -766,6 +766,11 @@ class TwitchChatManager {
                     console.log('💬 [TWITCH] Set command detected from', username, 'for emote:', emoteName);
                 }
                 this.handleSetCommand(username, emoteName);
+            } else if (content.startsWith(this.config.twitch.commands.reset)) {
+                if (this.config.debug.enableLogging) {
+                    console.log('💬 [TWITCH] Reset command detected from', username);
+                }
+                this.handleResetCommand(username);
             }
 
         } catch (error) {
@@ -883,6 +888,37 @@ class TwitchChatManager {
             console.log('💬 [TWITCH] Valid emote found:', validEmote.name, '- executing set command...');
         }
         this.caseOpening.rollWithSetEmote(validEmote);
+    }
+
+    handleResetCommand(username) {
+        if (this.caseOpening.isOpening) {
+            console.log(`🔄 ${username} tried to reset, but case is already opening`);
+            if (this.config.debug.enableLogging) {
+                console.log('💬 [TWITCH] Reset command blocked - case already in progress');
+            }
+            return;
+        }
+
+        console.log(`🔄 ${username} triggered a reset - clearing stored winner`);
+        if (this.config.debug.enableLogging) {
+            console.log('💬 [TWITCH] Executing reset command...');
+        }
+
+        // Clear the stored winner and reset to waiting state
+        if (this.caseOpening.winnerPersistence) {
+            this.caseOpening.winnerPersistence.clearWinner();
+            if (this.config.debug.enableLogging) {
+                console.log('💬 [TWITCH] Winner persistence cleared');
+            }
+        }
+
+        // Show waiting for redemption message
+        this.caseOpening.showWaitingForRedemption();
+        
+        console.log(`✅ ${username} successfully reset the Cat of the Day - ready for new redemptions`);
+        if (this.config.debug.enableLogging) {
+            console.log('💬 [TWITCH] Reset complete - widget returned to waiting state');
+        }
     }
 
     updateConnectionStatus(status) {
@@ -1038,8 +1074,8 @@ class TwitchEventSubManager {
         if (this.config.debug.enableLogging) {
             console.log('🎁 [CHANNEL POINTS] Initializing Twitch Channel Points Manager');
             console.log('🎁 [CHANNEL POINTS] Enabled:', this.config.twitch.channelPoints.enabled);
-            console.log('🎁 [CHANNEL POINTS] Listen to all rewards:', this.config.twitch.channelPoints.listenToAllRewards);
-            console.log('🎁 [CHANNEL POINTS] Specific reward ID:', this.config.twitch.channelPoints.specificRewardId || 'Not set');
+            console.log('🎁 [CHANNEL POINTS] Target reward ID:', this.config.twitch.channelPoints.rewardId || 'Not set');
+            console.log('🎁 [CHANNEL POINTS] Target reward title:', this.config.twitch.channelPoints.rewardTitle || 'Not set');
         }
 
         if (this.config.twitch.channelPoints.enabled) {
@@ -1049,7 +1085,7 @@ class TwitchEventSubManager {
         }
         
         // Add manual trigger for testing
-        window.testChannelPointRedeem = (rewardTitle = 'CAT OF THE DAY', rewardId = this.config.twitch.channelPoints.specificRewardId) => {
+        window.testChannelPointRedeem = (rewardTitle = 'CAT OF THE DAY', rewardId = this.config.twitch.channelPoints.rewardId) => {
             if (this.config.debug.enableLogging) {
                 console.log('🎁 [EVENTSUB] Manual test redemption triggered');
                 console.log(`🧪 [TEST] Simulating reward: "${rewardTitle}" with ID: ${rewardId}`);
@@ -1069,7 +1105,7 @@ class TwitchEventSubManager {
             this.handleChannelPointRedeem({
                 event: {
                     reward: { 
-                        id: this.config.twitch.channelPoints.specificRewardId, 
+                        id: this.config.twitch.channelPoints.rewardId, 
                         title: 'CAT OF THE DAY', 
                         cost: 500 
                     },
@@ -1077,6 +1113,12 @@ class TwitchEventSubManager {
                     user_login: 'testuser'
                 }
             });
+        };
+
+        // Test function for reset command
+        window.testReset = () => {
+            console.log('🔄 [TEST] Manual reset test triggered');
+            this.handleResetCommand('TestUser');
         };
     }
 
@@ -1296,39 +1338,27 @@ class TwitchEventSubManager {
         
         if (this.config.debug.enableLogging) {
             console.log('🎁 [EVENTSUB] Checking trigger conditions:', {
-                listenToAll: this.config.twitch.channelPoints.listenToAllRewards,
-                specificRewardId: this.config.twitch.channelPoints.specificRewardId,
-                rewardTitle: this.config.twitch.channelPoints.rewardTitle,
+                targetRewardId: this.config.twitch.channelPoints.rewardId,
+                targetRewardTitle: this.config.twitch.channelPoints.rewardTitle,
                 actualRewardTitle: reward.title,
                 actualRewardId: reward.id
             });
         }
         
-        if (this.config.twitch.channelPoints.listenToAllRewards) {
-            // Trigger on any channel point redemption
-            shouldTrigger = true;
-            console.log('🎁 [EVENTSUB] Triggering: Listen to all rewards is enabled');
-        } else if (this.config.twitch.channelPoints.specificRewardId) {
-            // Only trigger on specific reward ID
-            shouldTrigger = reward.id === this.config.twitch.channelPoints.specificRewardId;
+        if (this.config.twitch.channelPoints.rewardId) {
+            // Check by reward ID (most reliable)
+            shouldTrigger = reward.id === this.config.twitch.channelPoints.rewardId;
             if (this.config.debug.enableLogging) {
-                console.log(`🎁 [EVENTSUB] Specific ID check: ${reward.id} === ${this.config.twitch.channelPoints.specificRewardId} = ${shouldTrigger}`);
+                console.log(`🎁 [EVENTSUB] ID check: ${reward.id} === ${this.config.twitch.channelPoints.rewardId} = ${shouldTrigger}`);
+            }
+        } else if (this.config.twitch.channelPoints.rewardTitle) {
+            // Fallback to title matching if no ID specified
+            shouldTrigger = reward.title.toLowerCase() === this.config.twitch.channelPoints.rewardTitle.toLowerCase();
+            if (this.config.debug.enableLogging) {
+                console.log(`🎁 [EVENTSUB] Title check: "${reward.title}" === "${this.config.twitch.channelPoints.rewardTitle}" = ${shouldTrigger}`);
             }
         } else {
-            // Trigger on reward title match
-            const hassCat = reward.title.toLowerCase().includes('cat');
-            const hasRoll = reward.title.toLowerCase().includes('roll');
-            const matchesTitle = reward.title.toLowerCase() === this.config.twitch.channelPoints.rewardTitle.toLowerCase();
-            shouldTrigger = hassCat || hasRoll || matchesTitle;
-            
-            console.log('🎁 [EVENTSUB] Title matching:', {
-                rewardTitle: reward.title,
-                hasCat: hassCat,
-                hasRoll: hasRoll,
-                matchesConfigTitle: matchesTitle,
-                configTitle: this.config.twitch.channelPoints.rewardTitle,
-                willTrigger: shouldTrigger
-            });
+            console.warn('🎁 [EVENTSUB] No reward ID or title configured - skipping redemption');
         }
 
         if (shouldTrigger) {
@@ -1463,7 +1493,7 @@ class CaseOpening {
                 console.log('🔍 [DEBUG] Initialization flow check:', {
                     hasWinnerPersistence: !!this.winnerPersistence,
                     persistenceEnabled: this.config.persistence ? this.config.persistence.enableWinnerMemory : false,
-                    autoStart: this.config.animation.autoStart
+                    autoStart: false
                 });
             }
             if (this.winnerPersistence && this.config.persistence.enableWinnerMemory) {
@@ -1494,21 +1524,10 @@ class CaseOpening {
                         console.log('🎯 [CHANNEL POINTS] Persistence disabled but channel points enabled - showing waiting screen');
                     }
                     this.showWaitingForRedemption();
-                } else if (this.config.animation.autoStart) {
-                    // No channel points, use auto-start if enabled
-                    if (this.config.debug.enableLogging) {
-                        console.log(`🔄 [AUTO-START] Auto-start enabled - case will open in ${this.config.animation.autoStartDelay}ms`);
-                    }
-                    setTimeout(() => {
-                        if (this.config.debug.enableLogging) {
-                            console.log('🎯 [AUTO-START] Auto-starting case opening...');
-                        }
-                        this.openCase();
-                    }, this.config.animation.autoStartDelay);
                 } else {
-                    // Nothing configured, show waiting screen as fallback
+                    // No channel points enabled - show waiting screen
                     if (this.config.debug.enableLogging) {
-                        console.log('⏸️ [AUTO-START] Auto-start disabled - showing waiting screen');
+                        console.log('⏸️ [INIT] Channel points disabled - showing waiting screen');
                     }
                     this.showWaitingForRedemption();
                 }
@@ -1521,7 +1540,7 @@ class CaseOpening {
     }
 
     setupChannelHeader() {
-        if (this.config.channel.displayChannelName && this.config.channel.name !== "YourChannelName") {
+        if (false) { // Channel header disabled for cleaner UI
             const header = document.createElement('div');
             header.className = 'channel-header visible';
             header.innerHTML = `<div class="channel-name">${this.config.channel.name}</div>`;
@@ -1666,14 +1685,14 @@ class CaseOpening {
     }
 
     selectRandomEmote() {
-        // Use config-defined rarity weights
-        const weights = this.config.rarity.weights;
-        const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
-        let random = Math.random() * totalWeight;
+        // Select random emote using position-based rarity distribution
+        const distribution = this.config.rarity.distribution;
+        const random = Math.random() * 100;
+        let cumulative = 0;
         
-        for (const [rarity, weight] of Object.entries(weights)) {
-            random -= weight;
-            if (random <= 0) {
+        for (const [rarity, percentage] of Object.entries(distribution)) {
+            cumulative += percentage;
+            if (random <= cumulative) {
                 const emotesOfRarity = this.emotes.filter(e => e.rarity === rarity);
                 if (emotesOfRarity.length > 0) {
                     return emotesOfRarity[Math.floor(Math.random() * emotesOfRarity.length)];
@@ -2048,11 +2067,7 @@ class CaseOpening {
                 clearInterval(this.timeUpdateInterval);
                 
                 // Auto-start new roll if enabled
-                if (this.config.animation.autoStart) {
-                    setTimeout(() => {
-                        this.resetAndRoll();
-                    }, 2000);
-                }
+                // Auto-roll when timer expires (removed autoStart dependency)
             } else {
                 countdownElement.textContent = timeRemaining;
                 countdownElement.style.color = "#cccccc";
