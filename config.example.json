@@ -1,0 +1,107 @@
+{
+  "channel": {
+    "name": "YOUR_TWITCH_USERNAME",
+    "displayChannelName": false
+  },
+  "theme": {
+    "colors": {
+      "primary": "#1a1a1a",
+      "secondary": "#2d2d2d",
+      "tertiary": "#3d3d3d",
+      "accent": "#00aaff",
+      "accentHover": "#0088cc",
+      "text": "#ffffff",
+      "textSecondary": "#cccccc"
+    },
+    "rarityColors": {
+      "common": "#ffffff",
+      "uncommon": "#00ff00", 
+      "rare": "#0080ff",
+      "epic": "#8000ff",
+      "legendary": "#ffd700"
+    }
+  },
+  "animation": {
+    "rollDuration": 5000,
+    "enableSounds": true,
+    "autoStart": false,
+    "autoStartDelay": 500
+  },
+  "audio": {
+    "rollingSound": "gamba.mp3",
+    "winSound": {
+      "useCustom": false,
+      "customFile": "ding.mp3",
+      "volume": 0.5
+    }
+  },
+  "persistence": {
+    "enableWinnerMemory": true,
+    "winnerDurationHours": 24,
+    "allowRollCommand": true,
+    "showTimeRemaining": false
+  },
+  "emotes": {
+    "source": "7tv",
+    "channelID": "YOUR_7TV_CHANNEL_ID",
+    "globalEmotes": false,
+    "maxEmotes": 50,
+    "enableAnimated": true,
+    "targetEmotes": [
+      "EMOTE1",
+      "EMOTE2", 
+      "EMOTE3",
+      "EMOTE4",
+      "EMOTE5",
+      "EMOTE6",
+      "EMOTE7",
+      "EMOTE8",
+      "EMOTE9",
+      "EMOTE10",
+      "ADD_YOUR_EMOTES_HERE"
+    ]
+  },
+  "rarity": {
+    "weights": {
+      "common": 40,
+      "uncommon": 30,
+      "rare": 20,
+      "epic": 8,
+      "legendary": 2
+    },
+    "assignmentMethod": "position"
+  },
+  "display": {
+    "showRarityBorders": true,
+    "showGlowEffects": false,
+    "showLoadingSpinner": true,
+    "finalEmoteSize": "large"
+  },
+  "debug": {
+    "enableLogging": false,
+    "showFallbackEmotes": false
+  },
+  "twitch": {
+    "enableChatCommands": false,
+    "allowModerators": true,
+    "allowBroadcaster": true,
+    "allowSubscribers": false,
+    "commands": {
+      "roll": "#roll",
+      "set": "#set"
+    },
+    "channelPoints": {
+      "enabled": true,
+      "listenToAllRewards": false,
+      "specificRewardId": "YOUR_CHANNEL_POINT_REWARD_ID",
+      "rewardTitle": "",
+      "actualRewardTitle": "CAT OF THE DAY",
+      "actualRewardId": "YOUR_CHANNEL_POINT_REWARD_ID"
+    },
+    "oauth": {
+      "clientId": "YOUR_TWITCH_CLIENT_ID",
+      "accessToken": "YOUR_TWITCH_ACCESS_TOKEN",
+      "scopes": ["channel:read:redemptions"]
+    }
+  }
+}

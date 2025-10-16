@@ -1,0 +1,628 @@
+/* CSS Variables for easy theming - updated dynamically from config.json */
+:root {
+    --bg-primary: #1a1a1a;
+    --bg-secondary: #2d2d2d;
+    --bg-tertiary: #3d3d3d;
+    --text-primary: #ffffff;
+    --text-secondary: #cccccc;
+    --accent-primary: #00aaff;
+    --accent-hover: #0088cc;
+    
+    /* Rarity colors */
+    --rarity-common: #ffffff;
+    --rarity-uncommon: #00ff00;
+    --rarity-rare: #0080ff;
+    --rarity-epic: #8000ff;
+    --rarity-legendary: #ffd700;
+    
+    /* Animation timings */
+    --roll-duration: 4s;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: transparent;
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0;
+}
+
+/* Channel Header */
+.channel-header {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(45, 45, 45, 0.9);
+    padding: 10px 20px;
+    border-radius: 25px;
+    border: 2px solid var(--accent-primary);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    display: none;
+}
+
+.channel-header.visible {
+    display: block;
+    animation: slideDown 0.5s ease-out;
+}
+
+.channel-name {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--accent-primary);
+    text-align: center;
+}
+
+/* Twitch Chat Status */
+.twitch-status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(45, 45, 45, 0.9);
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+    z-index: 1001;
+    transition: all 0.3s ease;
+}
+
+.twitch-status.connected {
+    border: 2px solid #00ff88;
+    color: #00ff88;
+}
+
+.twitch-status.disconnected {
+    border: 2px solid #ff6b6b;
+    color: #ff6b6b;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Case Opening Container */
+.case-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Roller Container */
+.roller-container {
+    position: relative;
+    width: 80vw;
+    height: 120px;
+    overflow: hidden;
+    background: rgba(61, 61, 61, 0.3);
+    border-radius: 10px;
+    border: 2px solid var(--accent-primary);
+}
+
+.selection-window {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 160px;
+    height: 150px;
+    border: 4px solid var(--accent-primary);
+    border-radius: 15px;
+    background: rgba(0, 170, 255, 0.1);
+    z-index: 10;
+    pointer-events: none;
+}
+
+/* Only show glow effects when enabled */
+body.show-glow-effects .selection-window {
+    box-shadow: 0 0 20px rgba(0, 170, 255, 0.5);
+}
+
+.roller-track {
+    display: flex;
+    height: 100%;
+    transition: transform var(--roll-duration) var(--ease-out);
+    will-change: transform;
+    min-width: 100%;
+    align-items: center;
+}
+
+.emote-tile {
+    flex-shrink: 0;
+    width: 150px;
+    height: 150px;
+    margin: 15px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(26, 26, 26, 0.9);
+    border-radius: 12px;
+    border: 3px solid;
+
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+
+.emote-tile:hover {
+    transform: scale(1.05);
+}
+
+.emote-tile.common { border-color: var(--rarity-common); }
+.emote-tile.uncommon { border-color: var(--rarity-uncommon); }
+.emote-tile.rare { border-color: var(--rarity-rare); }
+.emote-tile.epic { border-color: var(--rarity-epic); }
+.emote-tile.legendary { border-color: var(--rarity-legendary); }
+
+.emote-image {
+    width: 80px;
+    height: 80px;
+    object-fit: contain;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    display: block !important;
+    margin: 0 auto;
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+.emote-name {
+    font-size: 0.7rem;
+    margin-top: 4px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 90%;
+}
+
+.rarity-glow {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Only show rarity glow effects when enabled */
+body.show-glow-effects .emote-tile:hover .rarity-glow {
+    opacity: 0.3;
+}
+
+body.show-glow-effects .common .rarity-glow { box-shadow: inset 0 0 20px var(--rarity-common); }
+body.show-glow-effects .uncommon .rarity-glow { box-shadow: inset 0 0 20px var(--rarity-uncommon); }
+body.show-glow-effects .rare .rarity-glow { box-shadow: inset 0 0 20px var(--rarity-rare); }
+body.show-glow-effects .epic .rarity-glow { box-shadow: inset 0 0 20px var(--rarity-epic); }
+body.show-glow-effects .legendary .rarity-glow { box-shadow: inset 0 0 20px var(--rarity-legendary); }
+
+/* Winning emote animation */
+.emote-tile.winning-emote {
+    animation: winningPulse 2s ease-in-out infinite, winningScale 1s ease-out forwards;
+    z-index: 100;
+}
+
+/* Use glow animation only when glow effects are enabled */
+body.show-glow-effects .emote-tile.winning-emote {
+    animation: winningPulseWithEffects 2s ease-in-out infinite, winningScale 1s ease-out forwards;
+}
+
+.selection-window.winning-glow {
+    animation: winningWindowGlow 2s ease-in-out infinite;
+}
+
+/* Use glow animation only when glow effects are enabled */
+body.show-glow-effects .selection-window.winning-glow {
+    animation: winningWindowGlowWithEffects 2s ease-in-out infinite;
+}
+
+@keyframes winningScale {
+    0% { transform: scale(1); }
+    100% { transform: scale(1.5); }
+}
+
+@keyframes winningPulse {
+    0%, 100% { 
+        opacity: 1;
+    }
+    50% { 
+        opacity: 0.8;
+    }
+}
+
+/* Glow effects for winning pulse when enabled */
+@keyframes winningPulseWithEffects {
+    0%, 100% { 
+        box-shadow: 0 0 20px currentColor;
+        opacity: 1;
+    }
+    50% { 
+        box-shadow: 0 0 40px currentColor, 0 0 60px currentColor;
+        opacity: 0.8;
+    }
+}
+
+@keyframes winningWindowGlow {
+    0%, 100% { 
+        border-color: var(--accent-primary);
+    }
+    50% { 
+        border-color: #ffffff;
+    }
+}
+
+/* Glow effects only when enabled */
+@keyframes winningWindowGlowWithEffects {
+    0%, 100% { 
+        box-shadow: 0 0 20px rgba(0, 170, 255, 0.5);
+        border-color: var(--accent-primary);
+    }
+    50% { 
+        box-shadow: 0 0 40px rgba(0, 170, 255, 0.8), 0 0 60px rgba(0, 170, 255, 0.6);
+        border-color: #ffffff;
+    }
+}
+
+/* Final emote display */
+.final-emote-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    gap: 5px;
+}
+
+.cat-title {
+    font-size: 3.5rem;
+    font-weight: 900;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: var(--accent-primary);
+    background: linear-gradient(135deg, var(--accent-primary), #ff6b9d, #c471f5);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 3s ease-in-out infinite;
+    text-shadow: 0 4px 8px rgba(0, 170, 255, 0.3);
+    margin-bottom: 20px;
+    font-family: 'Arial Black', 'Helvetica', sans-serif;
+}
+
+/* Legendary gold title styling */
+.cat-title.legendary {
+    color: #ffd700;
+    background: none;
+    -webkit-text-fill-color: #ffd700;
+    text-shadow: 0 4px 8px rgba(255, 215, 0, 0.5);
+    animation: legendaryTextGlow 2s ease-in-out infinite alternate;
+}
+
+/* Only show title glow effects when enabled */
+body.show-glow-effects .cat-title {
+    text-shadow: 
+        0 0 20px var(--accent-primary),
+        0 0 40px rgba(255, 107, 157, 0.6),
+        0 0 60px rgba(196, 113, 245, 0.4);
+    animation: titleGlow 2s ease-in-out infinite alternate, gradientShift 3s ease-in-out infinite;
+}
+
+/* Legendary title glow effects */
+body.show-glow-effects .cat-title.legendary {
+    text-shadow: 
+        0 0 25px #ffd700,
+        0 0 50px rgba(255, 215, 0, 0.8),
+        0 0 75px rgba(255, 140, 0, 0.6);
+    animation: legendaryGlow 2s ease-in-out infinite alternate, goldShimmer 2s ease-in-out infinite, gradientShift 4s ease-in-out infinite;
+}
+
+.time-remaining {
+    font-size: 1.2em;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+    text-align: center;
+    background: rgba(45, 45, 45, 0.8);
+    padding: 10px 20px;
+    border-radius: 20px;
+    border: 1px solid var(--accent-primary);
+}
+
+.time-remaining #countdown {
+    color: var(--accent-primary);
+    font-weight: bold;
+    font-family: monospace;
+}
+
+.final-emote-no-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: finalEmoteAppear 1s ease-out, finalEmotePulse 3s ease-in-out infinite 1s;
+}
+
+/* Use glow animation only when glow effects are enabled */
+body.show-glow-effects .final-emote-no-box {
+    animation: finalEmoteAppear 1s ease-out, finalEmotePulseWithEffects 3s ease-in-out infinite 1s;
+}
+
+.final-emote {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    border-radius: 20px;
+    border: 4px solid;
+    background: rgba(26, 26, 26, 0.8);
+    animation: finalEmoteAppear 1s ease-out, finalEmotePulse 3s ease-in-out infinite 1s;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Use glow animation only when glow effects are enabled */
+body.show-glow-effects .final-emote {
+    animation: finalEmoteAppear 1s ease-out, finalEmotePulseWithEffects 3s ease-in-out infinite 1s;
+}
+
+.final-emote.common { border-color: var(--rarity-common); }
+.final-emote.uncommon { border-color: var(--rarity-uncommon); }
+.final-emote.rare { border-color: var(--rarity-rare); }
+.final-emote.epic { border-color: var(--rarity-epic); }
+.final-emote.legendary { border-color: var(--rarity-legendary); }
+
+.final-emote-image {
+    width: 200px;
+    height: 200px;
+    object-fit: contain;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.final-emote-image-small {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.final-emote-name {
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.final-emote.common .final-emote-name { color: var(--rarity-common); }
+.final-emote.uncommon .final-emote-name { color: var(--rarity-uncommon); }
+.final-emote.rare .final-emote-name { color: var(--rarity-rare); }
+.final-emote.epic .final-emote-name { color: var(--rarity-epic); }
+.final-emote.legendary .final-emote-name { color: var(--rarity-legendary); }
+
+@keyframes finalEmoteAppear {
+    0% { 
+        opacity: 0;
+        transform: scale(0.3) rotateY(180deg);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1) rotateY(0deg);
+    }
+    100% { 
+        opacity: 1;
+        transform: scale(1) rotateY(0deg);
+    }
+}
+
+@keyframes finalEmotePulse {
+    0%, 100% { 
+        transform: scale(1);
+    }
+    50% { 
+        transform: scale(1.05);
+    }
+}
+
+/* Final emote pulse with glow effects when enabled */
+@keyframes finalEmotePulseWithEffects {
+    0%, 100% { 
+        filter: drop-shadow(0 0 20px var(--accent-primary));
+        transform: scale(1);
+    }
+    50% { 
+        filter: drop-shadow(0 0 40px var(--accent-primary)) drop-shadow(0 0 60px var(--accent-primary));
+        transform: scale(1.05);
+    }
+}
+
+@keyframes titleGlow {
+    0% { 
+        text-shadow: 0 0 20px var(--accent-primary);
+    }
+    100% { 
+        text-shadow: 0 0 30px var(--accent-primary), 0 0 40px var(--accent-primary);
+    }
+}
+
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes goldShimmer {
+    0% {
+        background-position: 0% 50%;
+    }
+    25% {
+        background-position: 100% 0%;
+    }
+    50% {
+        background-position: 200% 50%;
+    }
+    75% {
+        background-position: 100% 100%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+@keyframes legendaryGlow {
+    0% { 
+        text-shadow: 0 0 25px #ffd700, 0 0 50px rgba(255, 215, 0, 0.8), 0 0 75px rgba(255, 140, 0, 0.6);
+    }
+    100% { 
+        text-shadow: 0 0 35px #ffd700, 0 0 70px rgba(255, 215, 0, 1), 0 0 100px rgba(255, 140, 0, 0.8);
+    }
+}
+
+@keyframes legendaryTextGlow {
+    0% { 
+        color: #ffd700;
+        text-shadow: 0 4px 8px rgba(255, 215, 0, 0.5);
+    }
+    100% { 
+        color: #ffed4e;
+        text-shadow: 0 4px 12px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.4);
+    }
+}
+
+/* Loading state */
+.loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background: transparent;
+}
+
+.loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: var(--accent-primary);
+    animation: spin 1s ease-in-out infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .roller-container {
+        width: 95vw;
+        height: 100px;
+    }
+
+    .selection-window {
+        width: 130px;
+        height: 120px;
+        border: 3px solid var(--accent-primary);
+    }
+
+    .emote-tile {
+        width: 120px;
+        height: 120px;
+        margin: 12px 6px;
+    }
+
+    .emote-image {
+        width: 64px;
+        height: 64px;
+    }
+
+    .final-emote-image {
+        width: 150px;
+        height: 150px;
+    }
+
+    .cat-title {
+        font-size: 2rem;
+        letter-spacing: 2px;
+    }
+
+    .final-emote-container {
+        gap: 20px;
+    }
+}
+
+/* Waiting for redemption message */
+.waiting-message {
+    text-align: center;
+    padding: 20px 30px;
+    margin: 10px 0;
+}
+
+.waiting-status {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.9);
+}
+
+.waiting-instruction {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 25px;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+    line-height: 1.4;
+}
+
+.waiting-highlight {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.9);
+}
+
