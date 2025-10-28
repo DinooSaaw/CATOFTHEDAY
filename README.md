@@ -51,18 +51,21 @@ A Twitch streaming widget that allows viewers to redeem "Cat of the Day" using c
 
 ### 3. Getting Required IDs
 
-#### Twitch Client ID & Access Token:
+#### Twitch Client ID & Access Token
+
 1. Go to [Twitch Developer Console](https://dev.twitch.tv/console)
 2. Create a new application
 3. Set redirect URI to `http://localhost` or your domain
 4. Note your Client ID
 5. Generate an access token with `channel:read:redemptions` scope
 
-#### 7TV Channel ID:
+#### 7TV Channel ID
+
 1. Go to your 7TV channel page
 2. Your channel ID is in the URL: `https://7tv.app/users/YOUR_CHANNEL_ID`
 
-#### Channel Points Reward ID:
+#### Channel Points Reward ID
+
 1. Create a channel point reward called "CAT OF THE DAY"
 2. Use browser dev tools to inspect network requests when creating the reward
 3. Find the reward ID in the API response
@@ -70,6 +73,7 @@ A Twitch streaming widget that allows viewers to redeem "Cat of the Day" using c
 ### 4. OBS Studio Setup
 
 #### Method 1: Browser Source (Recommended)
+
 1. **Add Browser Source:**
    - Right-click in Sources → Add → Browser Source
    - Name: "Cat of the Day"
@@ -79,6 +83,7 @@ A Twitch streaming widget that allows viewers to redeem "Cat of the Day" using c
    - **Width:** 1920
    - **Height:** 1080
    - **Custom CSS:** (optional for positioning)
+
    ```css
    body { 
      margin: 0; 
@@ -91,21 +96,26 @@ A Twitch streaming widget that allows viewers to redeem "Cat of the Day" using c
    - Recommended: Center or top-center of screen
 
 #### Method 2: Local Server
+
 1. **Install a local web server** (e.g., `http-server` via npm)
 2. **Run server in the CATOFTHEDAY folder:**
+
    ```bash
    npx http-server -p 8080 --cors
    ```
+
 3. **Use URL:** `http://localhost:8080`
 
 ### 5. Audio Setup
 
-#### Custom Audio Files:
+#### Custom Audio Files
+
 - Place `gamba.mp3` in the project folder for rolling sound
 - Place `ding.mp3` in the project folder for win sound
 - Update `config.json` audio settings as needed
 
-#### Volume Control:
+#### Volume Control
+
 ```json
 "audio": {
   "rollingSound": "gamba.mp3",
@@ -119,18 +129,22 @@ A Twitch streaming widget that allows viewers to redeem "Cat of the Day" using c
 
 ## Usage
 
-### For Viewers:
+### For Viewers
+
 1. Redeem "CAT OF THE DAY" channel point reward
 2. Watch the emote rolling animation
 3. See the winning cat displayed for 24 hours
 
-### For Streamers:
+### For Streamers
+
 - Widget automatically shows waiting message when no redemptions
 - Winner persists for 24 hours (configurable)
 - Manual testing available via browser console
 
-### Testing Functions:
+### Testing Functions
+
 Open browser console (F12) and use:
+
 ```javascript
 testRoll()           // Test a redemption
 pauseAnimation()     // Pause during animation
@@ -140,12 +154,14 @@ togglePause()        // Toggle pause state
 
 ## Configuration Options
 
-### Rarity System:
+### Rarity System
+
 - **Weights:** Control probability of each rarity
 - **Colors:** Customize border and text colors
 - **Special Effects:** Gold styling for legendary wins
 
-### Persistence:
+### Persistence
+
 ```json
 "persistence": {
   "enableWinnerMemory": true,
@@ -154,7 +170,8 @@ togglePause()        // Toggle pause state
 }
 ```
 
-### Debug Settings:
+### Debug Settings
+
 ```json
 "debug": {
   "enableLogging": false,  // Set true for development
@@ -164,7 +181,7 @@ togglePause()        // Toggle pause state
 
 ## Troubleshooting
 
-### Common Issues:
+### Common Issues
 
 1. **Widget shows "WAITING FOR REDEMPTION"**
    - Check channel point reward ID is correct
@@ -186,7 +203,8 @@ togglePause()        // Toggle pause state
    - Check browser source dimensions
    - Try refreshing the browser source
 
-### Debug Mode:
+### Debug Mode
+
 Set `"enableLogging": true` in config.json to see detailed console logs.
 
 ## File Structure
@@ -207,6 +225,7 @@ CATOFTHEDAY/
 ## Support
 
 For issues or questions:
+
 1. Check console logs with debug mode enabled
 2. Verify all configuration values
 3. Test with browser developer tools
@@ -218,4 +237,4 @@ This project is provided as-is for streaming purposes.
 
 ##
 
-this readme is auto generate
+This Readme Is Auto Generate
