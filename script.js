@@ -1,19 +1,371 @@
+// ===== CONFIG VALIDATION =====
+class ConfigValidator {
+    constructor() {
+        this.errors = [];
+        this.warnings = [];
+    }
+
+    validateConfig(config) {
+        this.errors = [];
+        this.warnings = [];
+
+        if (!config) {
+            this.errors.push("Configuration is null or undefined");
+            return false;
+        }
+
+        // Validate required sections
+        this.validateRequiredSections(config);
+        
+        // Validate rarity distribution
+        this.validateRarityDistribution(config);
+        
+        // Validate theme colors
+        this.validateThemeColors(config);
+        
+        // Validate animation settings
+        this.validateAnimationSettings(config);
+        
+        // Validate audio settings
+        this.validateAudioSettings(config);
+        
+        // Validate emote settings
+        this.validateEmoteSettings(config);
+        
+        // Validate Twitch settings
+        this.validateTwitchSettings(config);
+
+        // Display errors and warnings
+        this.displayValidationResults();
+
+        return this.errors.length === 0;
+    }
+
+    validateRequiredSections(config) {
+        const requiredSections = ['channel', 'theme', 'animation', 'audio', 'emotes', 'rarity', 'display', 'twitch'];
+        
+        for (const section of requiredSections) {
+            if (!config[section]) {
+                this.errors.push(`Missing required configuration section: ${section}`);
+            }
+        }
+    }
+
+    validateRarityDistribution(config) {
+        if (!config.rarity || !config.rarity.distribution) {
+            this.errors.push("Missing rarity distribution configuration");
+            return;
+        }
+
+        const distribution = config.rarity.distribution;
+        const requiredRarities = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+        
+        // Check if all required rarities exist
+        for (const rarity of requiredRarities) {
+            if (distribution[rarity] === undefined || distribution[rarity] === null) {
+                this.errors.push(`Missing rarity percentage for: ${rarity}`);
+            } else if (typeof distribution[rarity] !== 'number') {
+                this.errors.push(`Rarity percentage for ${rarity} must be a number, got: ${typeof distribution[rarity]}`);
+            } else if (distribution[rarity] < 0) {
+                this.errors.push(`Rarity percentage for ${rarity} cannot be negative: ${distribution[rarity]}`);
+            } else if (distribution[rarity] > 100) {
+                this.errors.push(`Rarity percentage for ${rarity} cannot exceed 100: ${distribution[rarity]}`);
+            }
+        }
+
+        // Check if percentages add up to 100
+        const total = Object.values(distribution).reduce((sum, val) => sum + (Number(val) || 0), 0);
+        if (Math.abs(total - 100) > 0.01) { // Allow for small floating point errors
+            this.errors.push(`Rarity distribution percentages must total 100%. Current total: ${total}%`);
+        }
+
+        // Warn about unusual distributions
+        if (distribution.legendary > 10) {
+            this.warnings.push(`Legendary rarity percentage is unusually high: ${distribution.legendary}%`);
+        }
+        if (distribution.common < 30) {
+            this.warnings.push(`Common rarity percentage is unusually low: ${distribution.common}%`);
+        }
+    }
+
+    validateThemeColors(config) {
+        if (!config.theme || !config.theme.colors) {
+            this.errors.push("Missing theme colors configuration");
+            return;
+        }
+
+        const colors = config.theme.colors;
+        const requiredColors = ['primary', 'secondary', 'tertiary', 'accent', 'accentHover', 'text', 'textSecondary'];
+        
+        for (const colorName of requiredColors) {
+            if (!colors[colorName]) {
+                this.errors.push(`Missing theme color: ${colorName}`);
+            } else if (!this.isValidHexColor(colors[colorName])) {
+                this.errors.push(`Invalid hex color for ${colorName}: ${colors[colorName]}`);
+            }
+        }
+
+        // Validate rarity colors
+        if (!config.theme.rarityColors) {
+            this.errors.push("Missing rarity colors configuration");
+            return;
+        }
+
+        const rarityColors = config.theme.rarityColors;
+        const requiredRarityColors = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
+        
+        for (const rarity of requiredRarityColors) {
+            if (!rarityColors[rarity]) {
+                this.errors.push(`Missing rarity color: ${rarity}`);
+            } else if (!this.isValidHexColor(rarityColors[rarity])) {
+                this.errors.push(`Invalid hex color for rarity ${rarity}: ${rarityColors[rarity]}`);
+            }
+        }
+    }
+
+    validateAnimationSettings(config) {
+        if (!config.animation) {
+            this.errors.push("Missing animation configuration");
+            return;
+        }
+
+        const animation = config.animation;
+        
+        if (typeof animation.rollDuration !== 'number') {
+            this.errors.push(`Roll duration must be a number, got: ${typeof animation.rollDuration}`);
+        } else if (animation.rollDuration < 1000) {
+            this.warnings.push(`Roll duration is very short: ${animation.rollDuration}ms (recommended: 3000ms+)`);
+        } else if (animation.rollDuration > 15000) {
+            this.warnings.push(`Roll duration is very long: ${animation.rollDuration}ms (recommended: under 10000ms)`);
+        }
+
+        if (typeof animation.enableSounds !== 'boolean') {
+            this.errors.push(`Enable sounds must be a boolean, got: ${typeof animation.enableSounds}`);
+        }
+    }
+
+    validateAudioSettings(config) {
+        if (!config.audio) {
+            this.errors.push("Missing audio configuration");
+            return;
+        }
+
+        const audio = config.audio;
+        
+        if (audio.winSound) {
+            if (typeof audio.winSound.useCustom !== 'boolean') {
+                this.errors.push(`Audio useCustom must be a boolean, got: ${typeof audio.winSound.useCustom}`);
+            }
+            
+            if (typeof audio.winSound.volume !== 'number') {
+                this.errors.push(`Audio volume must be a number, got: ${typeof audio.winSound.volume}`);
+            } else if (audio.winSound.volume < 0 || audio.winSound.volume > 1) {
+                this.errors.push(`Audio volume must be between 0 and 1, got: ${audio.winSound.volume}`);
+            }
+        }
+    }
+
+    validateEmoteSettings(config) {
+        if (!config.emotes) {
+            this.errors.push("Missing emotes configuration");
+            return;
+        }
+
+        const emotes = config.emotes;
+        
+        if (!emotes.source || typeof emotes.source !== 'string') {
+            this.errors.push("Emote source must be specified as a string");
+        }
+        
+        if (emotes.source === '7tv' && (!emotes.channelID || emotes.channelID.trim() === '')) {
+            this.warnings.push("Channel ID is recommended when using 7TV emotes");
+        }
+        
+        if (typeof emotes.maxEmotes !== 'number' || emotes.maxEmotes < 1) {
+            this.errors.push(`Max emotes must be a positive number, got: ${emotes.maxEmotes}`);
+        } else if (emotes.maxEmotes > 200) {
+            this.warnings.push(`Max emotes is very high: ${emotes.maxEmotes} (may cause performance issues)`);
+        }
+        
+        if (emotes.targetEmotes && !Array.isArray(emotes.targetEmotes)) {
+            this.errors.push("Target emotes must be an array");
+        } else if (emotes.targetEmotes && emotes.targetEmotes.length === 0) {
+            this.warnings.push("Target emotes list is empty");
+        }
+    }
+
+    validateTwitchSettings(config) {
+        if (!config.twitch) {
+            this.errors.push("Missing Twitch configuration");
+            return;
+        }
+
+        const twitch = config.twitch;
+        
+        if (twitch.channelPoints && twitch.channelPoints.enabled) {
+            if (!twitch.channelPoints.rewardId || twitch.channelPoints.rewardId.trim() === '') {
+                this.errors.push("Channel points reward ID is required when channel points are enabled");
+            }
+            
+            if (!twitch.oauth || !twitch.oauth.accessToken || twitch.oauth.accessToken.trim() === '') {
+                this.errors.push("OAuth access token is required when channel points are enabled");
+            }
+        }
+        
+        if (twitch.oauth && twitch.oauth.accessToken && !twitch.oauth.clientId) {
+            this.warnings.push("Client ID is recommended when using OAuth");
+        }
+    }
+
+    isValidHexColor(color) {
+        return /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(color);
+    }
+
+    displayValidationResults() {
+        if (this.errors.length > 0) {
+            console.error("❌ Configuration Validation Errors:");
+            this.errors.forEach((error, index) => {
+                console.error(`${index + 1}. ${error}`);
+            });
+            
+            // Show errors in UI
+            this.showErrorModal(this.errors);
+        }
+
+        if (this.warnings.length > 0) {
+            console.warn("⚠️ Configuration Warnings:");
+            this.warnings.forEach((warning, index) => {
+                console.warn(`${index + 1}. ${warning}`);
+            });
+        }
+
+        if (this.errors.length === 0 && this.warnings.length === 0) {
+            console.log("✅ Configuration validation passed successfully!");
+        }
+    }
+
+    showErrorModal(errors) {
+        // Create error modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            font-family: Arial, sans-serif;
+        `;
+
+        const content = document.createElement('div');
+        content.style.cssText = `
+            background: #2d2d2d;
+            color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            max-height: 70vh;
+            overflow-y: auto;
+            border: 2px solid #ff4444;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        `;
+
+        const title = document.createElement('h2');
+        title.textContent = '❌ Configuration Errors';
+        title.style.cssText = `
+            color: #ff4444;
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-align: center;
+        `;
+
+        const errorList = document.createElement('ul');
+        errorList.style.cssText = `
+            margin: 0;
+            padding-left: 20px;
+            line-height: 1.5;
+        `;
+
+        errors.forEach(error => {
+            const listItem = document.createElement('li');
+            listItem.textContent = error;
+            listItem.style.marginBottom = '10px';
+            errorList.appendChild(listItem);
+        });
+
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close and Fix Configuration';
+        closeButton.style.cssText = `
+            background: #ff4444;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        `;
+
+        closeButton.onclick = () => {
+            document.body.removeChild(modal);
+        };
+
+        content.appendChild(title);
+        content.appendChild(errorList);
+        content.appendChild(closeButton);
+        modal.appendChild(content);
+        document.body.appendChild(modal);
+    }
+
+    getValidationSummary() {
+        return {
+            hasErrors: this.errors.length > 0,
+            hasWarnings: this.warnings.length > 0,
+            errorCount: this.errors.length,
+            warningCount: this.warnings.length,
+            errors: [...this.errors],
+            warnings: [...this.warnings]
+        };
+    }
+}
+
 // ===== CONFIG MANAGEMENT =====
 class ConfigManager {
     constructor() {
         this.config = null;
+        this.validator = new ConfigValidator();
     }
 
     async loadConfig() {
         try {
             const response = await fetch('./config.json');
             if (!response.ok) throw new Error('Failed to load config');
-            this.config = await response.json();
+            const config = await response.json();
+            
+            // Validate configuration
+            const isValid = this.validator.validateConfig(config);
+            
+            if (!isValid) {
+                console.error('Configuration validation failed, using default config');
+                this.config = this.getDefaultConfig();
+            } else {
+                this.config = config;
+            }
+            
             this.applyTheme();
             return this.config;
         } catch (error) {
             console.error('Error loading config:', error);
-            return this.getDefaultConfig();
+            this.config = this.getDefaultConfig();
+            this.applyTheme();
+            return this.config;
         }
     }
 
@@ -292,14 +644,31 @@ class SevenTVAPI {
     }
 
     assignRarity(index, total) {
-        // Assign rarities based on position (earlier emotes are rarer)
+        // Get distribution from config, fallback to defaults if not available
+        const distribution = this.config?.rarity?.distribution || {
+            legendary: 2,
+            epic: 6,
+            rare: 12,
+            uncommon: 25,
+            common: 55
+        };
+        
+        // Calculate position percentage
         const percentage = (index / total) * 100;
         
-        if (percentage <= 2) return 'legendary';   // First 2%
-        if (percentage <= 8) return 'epic';       // Next 6%
-        if (percentage <= 20) return 'rare';      // Next 12%
-        if (percentage <= 45) return 'uncommon';  // Next 25%
-        return 'common';                          // Remaining 55%
+        // Build cumulative distribution
+        let cumulative = 0;
+        const rarities = ['legendary', 'epic', 'rare', 'uncommon', 'common'];
+        
+        for (const rarity of rarities) {
+            cumulative += distribution[rarity];
+            if (percentage <= cumulative) {
+                return rarity;
+            }
+        }
+        
+        // Fallback to common if something goes wrong
+        return 'common';
     }
 
     getFallbackEmotes() {
