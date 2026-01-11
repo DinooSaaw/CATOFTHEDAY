@@ -610,6 +610,21 @@ body.show-glow-effects .final-emote {
     text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.9);
 }
 
+.waiting-status.error {
+    color: #ff3333;
+    text-shadow: 2px 2px 8px rgba(255, 0, 0, 0.6);
+    animation: pulse-error 2s infinite;
+}
+
+@keyframes pulse-error {
+    0%, 100% {
+        text-shadow: 2px 2px 8px rgba(255, 0, 0, 0.6);
+    }
+    50% {
+        text-shadow: 2px 2px 12px rgba(255, 0, 0, 1);
+    }
+}
+
 .waiting-instruction {
     font-size: 1.3rem;
     font-weight: 600;
