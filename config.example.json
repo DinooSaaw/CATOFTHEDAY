@@ -79,6 +79,12 @@
     "enableLogging": false,
     "showFallbackEmotes": false
   },
+  "backup": {
+    "_comment": "Optional: GitHub Gist backup for winner history",
+    "githubToken": "",
+    "autoBackup": false,
+    "autoBackupMinutes": 60
+  },
   "twitch": {
     "enableChatCommands": false,
     "allowModerators": true,

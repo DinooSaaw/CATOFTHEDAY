@@ -614,6 +614,495 @@ class WinnerHistoryManager {
     }
 }
 
+// ===== GITHUB GIST CLOUD BACKUP =====
+class GistBackupManager {
+    constructor(config, historyManager) {
+        this.config = config;
+        this.historyManager = historyManager;
+        this.gistId = localStorage.getItem('catOfTheDayGistId') || null;
+        this.githubToken = this.config.backup?.githubToken || null;
+        this.autoBackupEnabled = this.config.backup?.autoBackup || false;
+        this.autoBackupInterval = this.config.backup?.autoBackupMinutes || 60; // Default 60 minutes
+        this.lastBackupTime = parseInt(localStorage.getItem('lastGistBackupTime')) || 0;
+        this.autoBackupTimer = null;
+        this.enabled = !!(this.githubToken && this.githubToken.trim() !== '');
+        
+        if (this.enabled && this.autoBackupEnabled && this.gistId) {
+            this.startAutoBackup();
+        }
+    }
+
+    // Create or update gist with history
+    async syncToGist(description = 'Cat of the Day - Winner History') {
+        if (!this.enabled || !this.githubToken || this.githubToken.trim() === '') {
+            console.error('☁️ [GIST] No GitHub token configured');
+            console.log('☁️ [GIST] Add "backup": {"githubToken": "your_token"} to config.json');
+            console.log('☁️ [GIST] Get a token at: https://github.com/settings/tokens');
+            return { success: false, error: 'No GitHub token' };
+        }
+
+        try {
+            const history = this.historyManager.getHistory();
+            const stats = this.historyManager.getStatistics();
+            
+            const exportData = {
+                lastUpdated: new Date().toISOString(),
+                statistics: stats,
+                history: history,
+                config: {
+                    channel: this.config.channel?.name || 'unknown',
+                    totalEmotes: this.config.emotes?.targetEmotes?.length || 0
+                }
+            };
+
+            const gistData = {
+                description: description,
+                public: false,
+                files: {
+                    'cat-of-the-day-history.json': {
+                        content: JSON.stringify(exportData, null, 2)
+                    }
+                }
+            };
+
+            let response;
+            if (this.gistId) {
+                // Update existing gist
+                console.log('☁️ [GIST] Updating existing gist:', this.gistId);
+                response = await fetch(`https://api.github.com/gists/${this.gistId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': `token ${this.githubToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(gistData)
+                });
+            } else {
+                // Create new gist
+                console.log('☁️ [GIST] Creating new gist...');
+                response = await fetch('https://api.github.com/gists', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `token ${this.githubToken}`,
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(gistData)
+                });
+            }
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `HTTP ${response.status}`);
+            }
+
+            const result = await response.json();
+            
+            if (!this.gistId) {
+                this.gistId = result.id;
+                localStorage.setItem('catOfTheDayGistId', this.gistId);
+            }
+
+            this.lastBackupTime = Date.now();
+            localStorage.setItem('lastGistBackupTime', this.lastBackupTime.toString());
+
+            console.log('☁️ [GIST] ✅ Backup successful!');
+            console.log('☁️ [GIST] Gist ID:', this.gistId);
+            console.log('☁️ [GIST] URL:', result.html_url);
+            console.log('☁️ [GIST] Entries backed up:', history.length);
+
+            return { 
+                success: true, 
+                gistId: this.gistId, 
+                url: result.html_url,
+                entriesBackedUp: history.length
+            };
+
+        } catch (error) {
+            console.error('☁️ [GIST] Backup failed:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Restore history from gist
+    async restoreFromGist(gistId = this.gistId) {
+        if (!gistId) {
+            console.error('☁️ [GIST] No gist ID provided');
+            return { success: false, error: 'No gist ID' };
+        }
+
+        try {
+            console.log('☁️ [GIST] Fetching gist:', gistId);
+            
+            const headers = {
+                'Accept': 'application/vnd.github.v3+json'
+            };
+            
+            if (this.githubToken) {
+                headers['Authorization'] = `token ${this.githubToken}`;
+            }
+
+            const response = await fetch(`https://api.github.com/gists/${gistId}`, { headers });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const gist = await response.json();
+            const file = gist.files['cat-of-the-day-history.json'];
+            
+            if (!file) {
+                throw new Error('History file not found in gist');
+            }
+
+            const data = JSON.parse(file.content);
+            const imported = this.historyManager.importHistory(data);
+
+            if (imported) {
+                console.log('☁️ [GIST] ✅ Restore successful!');
+                console.log('☁️ [GIST] Entries restored:', data.history?.length || 0);
+                
+                // Save gist ID for future syncs
+                this.gistId = gistId;
+                localStorage.setItem('catOfTheDayGistId', gistId);
+                
+                return { 
+                    success: true, 
+                    entriesRestored: data.history?.length || 0,
+                    lastUpdated: data.lastUpdated
+                };
+            } else {
+                throw new Error('Failed to import history');
+            }
+
+        } catch (error) {
+            console.error('☁️ [GIST] Restore failed:', error.message);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Start automatic backup
+    startAutoBackup() {
+        if (this.autoBackupTimer) {
+            clearInterval(this.autoBackupTimer);
+        }
+
+        console.log(`☁️ [GIST] Auto-backup enabled (every ${this.autoBackupInterval} minutes)`);
+        
+        this.autoBackupTimer = setInterval(async () => {
+            console.log('☁️ [GIST] Running automatic backup...');
+            await this.syncToGist('Cat of the Day - Auto Backup');
+        }, this.autoBackupInterval * 60 * 1000);
+    }
+
+    // Stop automatic backup
+    stopAutoBackup() {
+        if (this.autoBackupTimer) {
+            clearInterval(this.autoBackupTimer);
+            this.autoBackupTimer = null;
+            console.log('☁️ [GIST] Auto-backup stopped');
+        }
+    }
+
+    // Get backup info
+    getBackupInfo() {
+        const info = {
+            hasGistId: !!this.gistId,
+            gistId: this.gistId,
+            hasToken: !!this.githubToken,
+            autoBackupEnabled: this.autoBackupEnabled,
+            autoBackupInterval: this.autoBackupInterval,
+            lastBackupTime: this.lastBackupTime,
+            lastBackupFormatted: this.lastBackupTime ? new Date(this.lastBackupTime).toLocaleString() : 'Never'
+        };
+        
+        console.log('☁️ [GIST] Backup Info:', info);
+        return info;
+    }
+}
+
+// ===== SYSTEM HEALTH CHECK =====
+class HealthCheckManager {
+    constructor(caseOpening) {
+        this.caseOpening = caseOpening;
+    }
+
+    // Run full system health check
+    async runHealthCheck() {
+        console.log('🏥 [HEALTH] Running system health check...');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
+        const results = {
+            timestamp: new Date().toISOString(),
+            overall: 'healthy',
+            checks: {}
+        };
+
+        // 1. Config Check
+        results.checks.config = this.checkConfig();
+        
+        // 2. Emotes Check
+        results.checks.emotes = this.checkEmotes();
+        
+        // 3. Audio Check
+        results.checks.audio = this.checkAudio();
+        
+        // 4. Persistence Check
+        results.checks.persistence = this.checkPersistence();
+        
+        // 5. History Check
+        results.checks.history = this.checkHistory();
+        
+        // 6. Twitch EventSub Check
+        results.checks.eventSub = await this.checkEventSub();
+        
+        // 7. 7TV API Check
+        results.checks.sevenTV = await this.check7TVAPI();
+        
+        // 8. Browser Storage Check
+        results.checks.storage = this.checkStorage();
+        
+        // 9. Backup Check
+        results.checks.backup = this.checkBackup();
+
+        // Determine overall health
+        const failedChecks = Object.values(results.checks).filter(c => c.status === 'error');
+        const warningChecks = Object.values(results.checks).filter(c => c.status === 'warning');
+        
+        if (failedChecks.length > 0) {
+            results.overall = 'unhealthy';
+        } else if (warningChecks.length > 0) {
+            results.overall = 'degraded';
+        }
+
+        // Print summary
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`🏥 [HEALTH] Overall Status: ${results.overall.toUpperCase()}`);
+        console.log(`🏥 [HEALTH] Checks Passed: ${Object.values(results.checks).filter(c => c.status === 'ok').length}/${Object.keys(results.checks).length}`);
+        console.log(`🏥 [HEALTH] Warnings: ${warningChecks.length}`);
+        console.log(`🏥 [HEALTH] Errors: ${failedChecks.length}`);
+        
+        if (failedChecks.length > 0) {
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('❌ FAILED CHECKS:');
+            failedChecks.forEach(check => {
+                console.log(`  • ${check.name}: ${check.message}`);
+            });
+        }
+        
+        if (warningChecks.length > 0) {
+            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            console.log('⚠️  WARNINGS:');
+            warningChecks.forEach(check => {
+                console.log(`  • ${check.name}: ${check.message}`);
+            });
+        }
+        
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+        return results;
+    }
+
+    checkConfig() {
+        const check = { name: 'Configuration', status: 'ok', message: 'Config loaded successfully' };
+        
+        if (!this.caseOpening.config) {
+            check.status = 'error';
+            check.message = 'Config not loaded';
+        } else if (!this.caseOpening.config.emotes?.channelID) {
+            check.status = 'warning';
+            check.message = 'No channel ID configured';
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Configuration: ${check.message}`);
+        return check;
+    }
+
+    checkEmotes() {
+        const check = { name: 'Emotes', status: 'ok', message: `${this.caseOpening.emotes.length} emotes loaded` };
+        
+        if (!this.caseOpening.emotes || this.caseOpening.emotes.length === 0) {
+            check.status = 'error';
+            check.message = 'No emotes loaded';
+        } else if (this.caseOpening.emotes.length < 10) {
+            check.status = 'warning';
+            check.message = `Only ${this.caseOpening.emotes.length} emotes loaded (recommend 10+)`;
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Emotes: ${check.message}`);
+        return check;
+    }
+
+    checkAudio() {
+        const check = { name: 'Audio System', status: 'ok', message: 'Audio system initialized' };
+        
+        if (!this.caseOpening.audioManager) {
+            check.status = 'error';
+            check.message = 'Audio manager not initialized';
+        } else if (!this.caseOpening.audioManager.gambaAudio) {
+            check.status = 'warning';
+            check.message = 'Rolling sound not loaded';
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Audio: ${check.message}`);
+        return check;
+    }
+
+    checkPersistence() {
+        const check = { name: 'Winner Persistence', status: 'ok', message: 'Persistence system ready' };
+        
+        if (this.caseOpening.config.persistence?.enableWinnerMemory) {
+            if (!this.caseOpening.winnerPersistence) {
+                check.status = 'error';
+                check.message = 'Persistence enabled but not initialized';
+            } else {
+                const current = this.caseOpening.winnerPersistence.getCurrentWinner();
+                check.message = current ? `Active winner: ${current.emote.name}` : 'No active winner';
+            }
+        } else {
+            check.status = 'warning';
+            check.message = 'Persistence disabled in config';
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Persistence: ${check.message}`);
+        return check;
+    }
+
+    checkHistory() {
+        const check = { name: 'Winner History', status: 'ok', message: 'History tracking active' };
+        
+        if (!this.caseOpening.winnerHistory) {
+            check.status = 'error';
+            check.message = 'History manager not initialized';
+        } else {
+            const stats = this.caseOpening.winnerHistory.getStatistics();
+            check.message = `${stats.totalRolls} total rolls tracked`;
+            
+            if (stats.totalRolls === 0) {
+                check.status = 'warning';
+                check.message = 'No history recorded yet';
+            }
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} History: ${check.message}`);
+        return check;
+    }
+
+    async checkEventSub() {
+        const check = { name: 'Twitch EventSub', status: 'ok', message: 'EventSub ready' };
+        
+        if (!this.caseOpening.config.twitch?.channelPoints?.enabled) {
+            check.status = 'warning';
+            check.message = 'Channel points disabled';
+        } else if (!this.caseOpening.twitchEventSub) {
+            check.status = 'error';
+            check.message = 'EventSub manager not initialized';
+        } else if (!this.caseOpening.twitchEventSub.connected) {
+            check.status = 'warning';
+            check.message = 'Not connected to EventSub';
+        } else {
+            check.message = 'Connected to EventSub WebSocket';
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} EventSub: ${check.message}`);
+        return check;
+    }
+
+    async check7TVAPI() {
+        const check = { name: '7TV API', status: 'ok', message: '7TV API accessible' };
+        
+        try {
+            const response = await fetch('https://7tv.io/v3/emote-sets/global', { 
+                method: 'HEAD',
+                cache: 'no-cache'
+            });
+            
+            if (!response.ok) {
+                check.status = 'warning';
+                check.message = `7TV API returned ${response.status}`;
+            }
+        } catch (error) {
+            check.status = 'error';
+            check.message = `Cannot reach 7TV API: ${error.message}`;
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} 7TV API: ${check.message}`);
+        return check;
+    }
+
+    checkStorage() {
+        const check = { name: 'Browser Storage', status: 'ok', message: 'localStorage available' };
+        
+        try {
+            const testKey = '__storage_test__';
+            localStorage.setItem(testKey, 'test');
+            localStorage.removeItem(testKey);
+            
+            // Check storage usage
+            let totalSize = 0;
+            for (let key in localStorage) {
+                if (localStorage.hasOwnProperty(key)) {
+                    totalSize += localStorage[key].length + key.length;
+                }
+            }
+            
+            const sizeMB = (totalSize / 1024 / 1024).toFixed(2);
+            check.message = `localStorage available (${sizeMB} MB used)`;
+            
+            if (totalSize > 5 * 1024 * 1024) { // 5MB warning
+                check.status = 'warning';
+                check.message = `localStorage usage high: ${sizeMB} MB`;
+            }
+        } catch (error) {
+            check.status = 'error';
+            check.message = 'localStorage not available';
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Storage: ${check.message}`);
+        return check;
+    }
+
+    checkBackup() {
+        const check = { name: 'Cloud Backup', status: 'ok', message: 'Backup system ready' };
+        
+        if (!this.caseOpening.gistBackup) {
+            check.status = 'warning';
+            check.message = 'Backup manager not initialized';
+        } else {
+            const info = this.caseOpening.gistBackup.getBackupInfo();
+            
+            if (!info.hasToken) {
+                check.status = 'warning';
+                check.message = 'No GitHub token configured';
+            } else if (!info.hasGistId) {
+                check.status = 'warning';
+                check.message = 'No gist created yet (run syncToGist())';
+            } else {
+                check.message = `Last backup: ${info.lastBackupFormatted}`;
+                
+                // Warn if backup is old (>7 days)
+                if (info.lastBackupTime && Date.now() - info.lastBackupTime > 7 * 24 * 60 * 60 * 1000) {
+                    check.status = 'warning';
+                    check.message += ' (backup is old)';
+                }
+            }
+        }
+        
+        console.log(`${this.getStatusIcon(check.status)} Backup: ${check.message}`);
+        return check;
+    }
+
+    getStatusIcon(status) {
+        const icons = {
+            'ok': '✅',
+            'warning': '⚠️',
+            'error': '❌'
+        };
+        return icons[status] || '❓';
+    }
+}
+
 // ===== AUDIO SYSTEM =====
 class AudioManager {
     constructor(config = null) {
@@ -1648,6 +2137,8 @@ class CaseOpening {
         this.twitchEventSub = null;
         this.winnerPersistence = null;
         this.winnerHistory = null;
+        this.gistBackup = null;
+        this.healthCheck = null;
         this.emotes = [];
         this.isOpening = false;
         this.rollerTrack = null;
@@ -1723,6 +2214,81 @@ class CaseOpening {
                     console.log('✅ History cleared');
                 }
             };
+            
+            // Initialize GitHub Gist backup manager
+            this.gistBackup = new GistBackupManager(this.config, this.winnerHistory);
+            if (this.gistBackup.enabled) {
+                if (this.config.debug.enableLogging) {
+                    console.log('☁️ [BACKUP] Gist backup manager initialized and enabled');
+                }
+            } else {
+                if (this.config.debug.enableLogging) {
+                    console.log('☁️ [BACKUP] Gist backup manager initialized but disabled (no token)');
+                }
+            }
+            
+            // Add global functions for backup management (only if enabled)
+            if (this.gistBackup.enabled) {
+                window.syncToGist = async () => {
+                    console.log('☁️ [GIST] Starting manual backup...');
+                    const result = await this.gistBackup.syncToGist();
+                    if (result.success) {
+                        console.log('✅ Backup complete! URL:', result.url);
+                    } else {
+                        console.error('❌ Backup failed:', result.error);
+                    }
+                    return result;
+                };
+                
+                window.restoreFromGist = async (gistId) => {
+                    if (!gistId) {
+                        console.error('Usage: restoreFromGist("your_gist_id")');
+                        return;
+                    }
+                    console.log('☁️ [GIST] Starting restore...');
+                    const result = await this.gistBackup.restoreFromGist(gistId);
+                    if (result.success) {
+                        console.log('✅ Restore complete! Entries restored:', result.entriesRestored);
+                        console.log('🔄 Reload the page to see the restored data');
+                    } else {
+                        console.error('❌ Restore failed:', result.error);
+                    }
+                    return result;
+                };
+                
+                window.getBackupInfo = () => this.gistBackup.getBackupInfo();
+            }
+            
+            // Initialize health check manager
+            this.healthCheck = new HealthCheckManager(this);
+            if (this.config.debug.enableLogging) {
+                console.log('🏥 [HEALTH] Health check manager initialized');
+            }
+            
+            // Add global function for health check
+            window.runHealthCheck = async () => {
+                return await this.healthCheck.runHealthCheck();
+            };
+            
+            // Print available console commands
+            console.log('%c🐱 Cat of the Day - Available Commands', 'font-size: 14px; font-weight: bold; color: #00aaff;');
+            console.log('%cHistory:', 'font-weight: bold; color: #00ff00;');
+            console.log('  • getWinnerStats() - View winner statistics');
+            console.log('  • exportWinnerHistory() - Download history as JSON');
+            console.log('  • clearWinnerHistory() - Clear all history');
+            
+            // Only show backup commands if enabled
+            if (this.gistBackup.enabled) {
+                console.log('%cBackup:', 'font-weight: bold; color: #ffd700;');
+                console.log('  • syncToGist() - Backup to GitHub Gist');
+                console.log('  • restoreFromGist("gist_id") - Restore from Gist');
+                console.log('  • getBackupInfo() - Check backup status');
+            }
+            
+            console.log('%cSystem:', 'font-weight: bold; color: #ff6600;');
+            console.log('  • runHealthCheck() - Run system diagnostics');
+            console.log('  • testRoll() - Trigger test roll');
+            console.log('%c ', 'font-size: 1px;'); // Add spacing
             
             // Test debug message to confirm console is working
             if (this.config.debug.enableLogging) {

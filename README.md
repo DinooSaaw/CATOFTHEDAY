@@ -238,6 +238,77 @@ The exported JSON contains:
 - Statistics (total rolls, rarity distribution, emote frequency)
 - Complete history of all winners
 
+## Cloud Backup (GitHub Gist)
+
+Automatically sync your winner history to GitHub Gist for cloud backup and access across devices.
+
+### Setup
+
+1. **Create a GitHub Personal Access Token:**
+   - Go to https://github.com/settings/tokens
+   - Click "Generate new token" (classic)
+   - Give it a name like "Cat of the Day Backup"
+   - Select scope: `gist`
+   - Click "Generate token" and copy it
+
+2. **Add token to config.json:**
+```json
+{
+  "backup": {
+    "githubToken": "your_github_token_here",
+    "autoBackup": true,
+    "autoBackupMinutes": 60
+  }
+}
+```
+
+### Backup Commands
+
+```javascript
+// Manual backup to Gist (creates new gist or updates existing)
+syncToGist()
+
+// Restore history from a Gist
+restoreFromGist("gist_id_here")
+
+// Check backup status
+getBackupInfo()
+```
+
+**Features:**
+- 🔒 Private gists (not public)
+- 🔄 Automatic backups (optional, configurable interval)
+- 📊 Includes statistics with backup
+- 🔗 Returns gist URL for easy sharing
+
+## System Health Check
+
+Run comprehensive diagnostics to ensure everything is working correctly.
+
+### Health Check Command
+
+```javascript
+// Run full system health check
+runHealthCheck()
+```
+
+**Checks performed:**
+- ✅ Configuration loaded
+- ✅ Emotes availability
+- ✅ Audio system status
+- ✅ Persistence system
+- ✅ History tracking
+- ✅ Twitch EventSub connection
+- ✅ 7TV API connectivity
+- ✅ Browser storage capacity
+- ✅ Backup system status
+
+**Output includes:**
+- Overall system health (healthy/degraded/unhealthy)
+- Detailed status for each component
+- Warnings and errors with descriptions
+- Recommendations for fixes
+
 ## File Structure
 
 ```
