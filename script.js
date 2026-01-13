@@ -1630,7 +1630,7 @@ class TwitchOAuthManager {
     }
 
     // Start OAuth flow
-    startAuthFlow() {
+    startAuthFlow(copyToClipboard = false) {
         if (!this.clientId) {
             console.error('🔑 [OAUTH] No client ID configured');
             alert('Please configure your Twitch Client ID in config.json');
@@ -1638,8 +1638,37 @@ class TwitchOAuthManager {
         }
 
         const authUrl = this.getAuthUrl();
-        console.log('🔑 [OAUTH] Starting auth flow:', authUrl);
-        window.open(authUrl, 'twitch-auth', 'width=500,height=700');
+        
+        if (copyToClipboard) {
+            // Try to copy to clipboard with fallback
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(authUrl).then(() => {
+                    console.log('🔑 [OAUTH] Auth URL copied to clipboard!');
+                    console.log('🔑 [OAUTH] URL:', authUrl);
+                    alert('Auth URL copied to clipboard! Paste it in your browser.');
+                }).catch(err => {
+                    console.error('🔑 [OAUTH] Failed to copy to clipboard:', err);
+                    console.log('🔑 [OAUTH] Auth URL:', authUrl);
+                    // Fallback: show prompt with URL
+                    this.showUrlPrompt(authUrl);
+                });
+            } else {
+                // Clipboard API not available, use fallback
+                console.log('🔑 [OAUTH] Clipboard API not available, showing URL in prompt');
+                console.log('🔑 [OAUTH] Auth URL:', authUrl);
+                this.showUrlPrompt(authUrl);
+            }
+        } else {
+            // Open in new window as before
+            console.log('🔑 [OAUTH] Starting auth flow:', authUrl);
+            window.open(authUrl, 'twitch-auth', 'width=500,height=700');
+        }
+    }
+
+    // Show URL in a prompt for manual copying
+    showUrlPrompt(url) {
+        const message = 'Copy this URL and paste it in your browser:\n\n' + url;
+        prompt(message, url);
     }
 
     // Handle OAuth callback
@@ -1793,12 +1822,12 @@ class TwitchEventSubManager {
         }
         
         // Add global function for easy access
-        window.startTwitchAuth = () => {
+        window.startTwitchAuth = (copyToClipboard = false) => {
             if (!this.config.twitch.oauth.clientId) {
                 alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
                 return;
             }
-            this.oauthManager.startAuthFlow();
+            this.oauthManager.startAuthFlow(copyToClipboard);
         };
     }
 
@@ -1810,16 +1839,16 @@ class TwitchEventSubManager {
         console.log('🔑 [OAUTH] 1. A Twitch Client ID');
         console.log('🔑 [OAUTH] 2. An OAuth access token with channel:read:redemptions scope');
         console.log('🔑 [OAUTH] ');
-        console.log('🔑 [OAUTH] Run: startTwitchAuth() to begin setup');
+        console.log('🔑 [OAUTH] Run: startTwitchAuth() or startTwitchAuth(true) to copy URL');
         console.log('🔑 [OAUTH] =================================');
         
         // Add global function for easy access
-        window.startTwitchAuth = () => {
+        window.startTwitchAuth = (copyToClipboard = false) => {
             if (!this.config.twitch.oauth.clientId) {
                 alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
                 return;
             }
-            this.oauthManager.startAuthFlow();
+            this.oauthManager.startAuthFlow(copyToClipboard);
         };
     }
 
@@ -1845,12 +1874,12 @@ class TwitchEventSubManager {
         }
         
         // Add global function for easy access
-        window.startTwitchAuth = () => {
+        window.startTwitchAuth = (copyToClipboard = false) => {
             if (!this.config.twitch.oauth.clientId) {
                 alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
                 return;
             }
-            this.oauthManager.startAuthFlow();
+            this.oauthManager.startAuthFlow(copyToClipboard);
         };
     }
 
@@ -1873,12 +1902,12 @@ class TwitchEventSubManager {
         }
         
         // Add global function for easy access
-        window.startTwitchAuth = () => {
+        window.startTwitchAuth = (copyToClipboard = false) => {
             if (!this.config.twitch.oauth.clientId) {
                 alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
                 return;
             }
-            this.oauthManager.startAuthFlow();
+            this.oauthManager.startAuthFlow(copyToClipboard);
         };
     }
 
@@ -2288,6 +2317,8 @@ class CaseOpening {
             console.log('%cSystem:', 'font-weight: bold; color: #ff6600;');
             console.log('  • runHealthCheck() - Run system diagnostics');
             console.log('  • testRoll() - Trigger test roll');
+            console.log('  • startTwitchAuth() - Open OAuth URL in new window');
+            console.log('  • startTwitchAuth(true) - Copy OAuth URL to clipboard');
             console.log('%c ', 'font-size: 1px;'); // Add spacing
             
             // Test debug message to confirm console is working
