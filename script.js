@@ -478,6 +478,142 @@ class WinnerPersistence {
     }
 }
 
+// ===== WINNER HISTORY TRACKER =====
+class WinnerHistoryManager {
+    constructor(config) {
+        this.config = config;
+        this.storageKey = 'catOfTheDayHistory';
+        this.maxHistorySize = 1000; // Keep last 1000 winners
+    }
+
+    // Add a winner to history
+    addWinner(emote) {
+        const history = this.getHistory();
+        
+        const entry = {
+            emote: {
+                name: emote.name,
+                rarity: emote.rarity,
+                imageUrl: emote.imageUrl
+            },
+            timestamp: Date.now(),
+            date: new Date().toISOString()
+        };
+        
+        history.unshift(entry); // Add to beginning
+        
+        // Keep only the last maxHistorySize entries
+        if (history.length > this.maxHistorySize) {
+            history.splice(this.maxHistorySize);
+        }
+        
+        localStorage.setItem(this.storageKey, JSON.stringify(history));
+        
+        if (this.config.debug && this.config.debug.enableLogging) {
+            console.log('📊 [HISTORY] Winner added to history:', emote.name, '(' + emote.rarity + ')');
+            console.log('📊 [HISTORY] Total entries:', history.length);
+        }
+        
+        return entry;
+    }
+
+    // Get full history
+    getHistory() {
+        try {
+            const stored = localStorage.getItem(this.storageKey);
+            if (!stored) return [];
+            return JSON.parse(stored);
+        } catch (error) {
+            console.error('📊 [HISTORY] Error loading history:', error);
+            return [];
+        }
+    }
+
+    // Get statistics
+    getStatistics() {
+        const history = this.getHistory();
+        
+        const stats = {
+            totalRolls: history.length,
+            byRarity: {
+                common: 0,
+                uncommon: 0,
+                rare: 0,
+                epic: 0,
+                legendary: 0
+            },
+            byEmote: {},
+            firstRoll: history[history.length - 1]?.date || null,
+            lastRoll: history[0]?.date || null
+        };
+        
+        history.forEach(entry => {
+            // Count by rarity
+            if (entry.emote.rarity) {
+                stats.byRarity[entry.emote.rarity]++;
+            }
+            
+            // Count by emote name
+            const emoteName = entry.emote.name;
+            if (!stats.byEmote[emoteName]) {
+                stats.byEmote[emoteName] = {
+                    count: 0,
+                    rarity: entry.emote.rarity
+                };
+            }
+            stats.byEmote[emoteName].count++;
+        });
+        
+        return stats;
+    }
+
+    // Export history as JSON file download
+    exportHistory() {
+        const history = this.getHistory();
+        const stats = this.getStatistics();
+        
+        const exportData = {
+            exportDate: new Date().toISOString(),
+            statistics: stats,
+            history: history
+        };
+        
+        const dataStr = JSON.stringify(exportData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `cat-of-the-day-history-${Date.now()}.json`;
+        link.click();
+        
+        URL.revokeObjectURL(url);
+        
+        console.log('📊 [HISTORY] History exported:', history.length, 'entries');
+    }
+
+    // Clear all history
+    clearHistory() {
+        localStorage.removeItem(this.storageKey);
+        console.log('📊 [HISTORY] History cleared');
+    }
+
+    // Import history from JSON
+    importHistory(jsonData) {
+        try {
+            const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            const history = data.history || data; // Support both full export format and plain array
+            
+            localStorage.setItem(this.storageKey, JSON.stringify(history));
+            console.log('📊 [HISTORY] History imported:', history.length, 'entries');
+            return true;
+        } catch (error) {
+            console.error('📊 [HISTORY] Error importing history:', error);
+            return false;
+        }
+    }
+}
+
 // ===== AUDIO SYSTEM =====
 class AudioManager {
     constructor(config = null) {
@@ -929,7 +1065,7 @@ class TwitchOAuthManager {
         this.config = config;
         this.clientId = config.twitch.oauth.clientId;
         this.accessToken = config.twitch.oauth.accessToken;
-        this.redirectUri = "https://dinoosaaw.com/twitch/fallback";
+        this.redirectUri = "http://localhost:5173";
     }
 
     // Check if we have a valid access token
@@ -1066,9 +1202,8 @@ class TwitchEventSubManager {
             console.log('🎁 [CHANNEL POINTS] Specific reward ID:', this.config.twitch.channelPoints.specificRewardId || 'Not set');
         }
 
-        if (this.config.twitch.channelPoints.enabled) {
-            this.initializeWithAuth();
-        } else {
+        // Don't auto-initialize here - let the main flow control initialization timing
+        if (!this.config.twitch.channelPoints.enabled) {
             console.log('🎁 [EVENTSUB] Channel points disabled in config');
         }
         
@@ -1113,7 +1248,7 @@ class TwitchEventSubManager {
             const result = await this.oauthManager.handleCallback();
             if (result) {
                 console.log('🔑 [OAUTH] Please update your config with the token shown above, then reload');
-                return;
+                return false;
             }
         }
         
@@ -1121,7 +1256,7 @@ class TwitchEventSubManager {
         if (!this.oauthManager.hasValidToken()) {
             console.log('🔑 [OAUTH] No valid token found');
             this.showAuthInstructions();
-            return;
+            return false;
         }
         
         // Validate the token
@@ -1129,11 +1264,29 @@ class TwitchEventSubManager {
         if (!validation) {
             console.log('🔑 [OAUTH] Token validation failed');
             this.showTokenValidationError();
-            return;
+            return false;
+        }
+        
+        // Verify the token's user_id matches the configured channel ID
+        if (validation.user_id !== this.config.emotes.channelID) {
+            console.error('🔑 [OAUTH] Token user ID mismatch!');
+            console.error(`🔑 [OAUTH] Token is for user ID: ${validation.user_id}`);
+            console.error(`🔑 [OAUTH] Config channel ID: ${this.config.emotes.channelID}`);
+            this.showUserIdMismatchError(validation.user_id, this.config.emotes.channelID);
+            return false;
+        }
+        
+        // Verify the token has the required scope
+        if (!validation.scopes || !validation.scopes.includes('channel:read:redemptions')) {
+            console.error('🔑 [OAUTH] Token missing required scope: channel:read:redemptions');
+            console.error('🔑 [OAUTH] Token scopes:', validation.scopes);
+            this.showMissingScopeError(validation.scopes);
+            return false;
         }
         
         console.log('🎁 [EVENTSUB] OAuth authenticated, starting EventSub connection...');
         this.connect();
+        return true;
     }
 
     showTokenValidationError() {
@@ -1170,6 +1323,65 @@ class TwitchEventSubManager {
         console.log('🔑 [OAUTH] ');
         console.log('🔑 [OAUTH] Run: startTwitchAuth() to begin setup');
         console.log('🔑 [OAUTH] =================================');
+        
+        // Add global function for easy access
+        window.startTwitchAuth = () => {
+            if (!this.config.twitch.oauth.clientId) {
+                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
+                return;
+            }
+            this.oauthManager.startAuthFlow();
+        };
+    }
+
+    showUserIdMismatchError(tokenUserId, configChannelId) {
+        console.error('🔑 [OAUTH] =================================');
+        console.error('🔑 [OAUTH] USER ID MISMATCH ERROR');
+        console.error('🔑 [OAUTH] =================================');
+        console.error('🔑 [OAUTH] The access token does NOT belong to the configured channel!');
+        console.error('🔑 [OAUTH] ');
+        console.error(`🔑 [OAUTH] Token User ID:     ${tokenUserId}`);
+        console.error(`🔑 [OAUTH] Config Channel ID: ${configChannelId}`);
+        console.error('🔑 [OAUTH] ');
+        console.error('🔑 [OAUTH] The token MUST be generated by the broadcaster themselves.');
+        console.error('🔑 [OAUTH] Please use startTwitchAuth() while logged in as the broadcaster.');
+        console.error('🔑 [OAUTH] =================================');
+        
+        // Display error in UI
+        if (this.caseOpening) {
+            this.caseOpening.showErrorMessage(
+                'USER ID MISMATCH',
+                `Token is for user ${tokenUserId}, but config has channel ${configChannelId}. The broadcaster must generate their own token.`
+            );
+        }
+        
+        // Add global function for easy access
+        window.startTwitchAuth = () => {
+            if (!this.config.twitch.oauth.clientId) {
+                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
+                return;
+            }
+            this.oauthManager.startAuthFlow();
+        };
+    }
+
+    showMissingScopeError(actualScopes) {
+        console.error('🔑 [OAUTH] =================================');
+        console.error('🔑 [OAUTH] MISSING REQUIRED SCOPE');
+        console.error('🔑 [OAUTH] =================================');
+        console.error('🔑 [OAUTH] Required scope: channel:read:redemptions');
+        console.error('🔑 [OAUTH] Actual scopes:', actualScopes || 'none');
+        console.error('🔑 [OAUTH] ');
+        console.error('🔑 [OAUTH] Please generate a new token with the correct scope.');
+        console.error('🔑 [OAUTH] =================================');
+        
+        // Display error in UI
+        if (this.caseOpening) {
+            this.caseOpening.showErrorMessage(
+                'MISSING SCOPE',
+                'Token lacks channel:read:redemptions scope. Please generate a new token using startTwitchAuth()'
+            );
+        }
         
         // Add global function for easy access
         window.startTwitchAuth = () => {
@@ -1435,6 +1647,7 @@ class CaseOpening {
         this.twitchChat = null;
         this.twitchEventSub = null;
         this.winnerPersistence = null;
+        this.winnerHistory = null;
         this.emotes = [];
         this.isOpening = false;
         this.rollerTrack = null;
@@ -1476,6 +1689,41 @@ class CaseOpening {
                 }
             }
             
+            // Initialize winner history tracker
+            this.winnerHistory = new WinnerHistoryManager(this.config);
+            if (this.config.debug.enableLogging) {
+                console.log('📊 [HISTORY] Winner history tracker initialized');
+                const stats = this.winnerHistory.getStatistics();
+                console.log('📊 [HISTORY] Total historical rolls:', stats.totalRolls);
+            }
+            
+            // Add global functions for history management
+            window.exportWinnerHistory = () => this.winnerHistory.exportHistory();
+            window.getWinnerStats = () => {
+                const stats = this.winnerHistory.getStatistics();
+                console.log('📊 WINNER STATISTICS:');
+                console.log('Total Rolls:', stats.totalRolls);
+                console.log('\nBy Rarity:');
+                Object.entries(stats.byRarity).forEach(([rarity, count]) => {
+                    const percentage = stats.totalRolls > 0 ? ((count / stats.totalRolls) * 100).toFixed(1) : 0;
+                    console.log(`  ${rarity}: ${count} (${percentage}%)`);
+                });
+                console.log('\nMost Common Emotes:');
+                const topEmotes = Object.entries(stats.byEmote)
+                    .sort((a, b) => b[1].count - a[1].count)
+                    .slice(0, 10);
+                topEmotes.forEach(([name, data], i) => {
+                    console.log(`  ${i + 1}. ${name}: ${data.count} times (${data.rarity})`);
+                });
+                return stats;
+            };
+            window.clearWinnerHistory = () => {
+                if (confirm('Are you sure you want to clear all winner history?')) {
+                    this.winnerHistory.clearHistory();
+                    console.log('✅ History cleared');
+                }
+            };
+            
             // Test debug message to confirm console is working
             if (this.config.debug.enableLogging) {
                 console.log('🔧 [DEBUG] System initialized with debug logging enabled');
@@ -1484,7 +1732,7 @@ class CaseOpening {
             // Initialize Twitch chat manager
             this.twitchChat = new TwitchChatManager(this.config, this);
             
-            // Initialize Twitch EventSub manager for channel points
+            // Initialize Twitch EventSub manager for channel points (but don't initialize yet)
             this.twitchEventSub = new TwitchEventSubManager(this.config, this);
             
             // Show channel header if enabled
@@ -1549,20 +1797,51 @@ class CaseOpening {
                     this.showExistingWinner(existingWinner.emote);
                     this.startTimeUpdateDisplay();
                 } else {
-                    // No valid winner, wait for redemption
-                    if (this.config.debug.enableLogging) {
-                        console.log('🎯 [PERSISTENCE] No valid winner found - waiting for channel point redemption');
+                    // No valid winner, check if channel points are configured before showing waiting screen
+                    if (this.config.twitch.channelPoints.enabled) {
+                        // Attempt to initialize EventSub
+                        const eventSubReady = await this.twitchEventSub.initializeWithAuth();
+                        if (eventSubReady) {
+                            // EventSub is ready, show waiting screen
+                            if (this.config.debug.enableLogging) {
+                                console.log('🎯 [PERSISTENCE] No valid winner found - waiting for channel point redemption');
+                            }
+                            this.showWaitingForRedemption();
+                        }
+                        // If eventSubReady is false, the error screen is already shown by initializeWithAuth
+                    } else {
+                        // No channel points, check auto-start
+                        if (this.config.animation.autoStart) {
+                            if (this.config.debug.enableLogging) {
+                                console.log(`🔄 [AUTO-START] Auto-start enabled - case will open in ${this.config.animation.autoStartDelay}ms`);
+                            }
+                            setTimeout(() => {
+                                if (this.config.debug.enableLogging) {
+                                    console.log('🎯 [AUTO-START] Auto-starting case opening...');
+                                }
+                                this.openCase();
+                            }, this.config.animation.autoStartDelay);
+                        } else {
+                            if (this.config.debug.enableLogging) {
+                                console.log('⏸️ [AUTO-START] Auto-start disabled - showing waiting screen');
+                            }
+                            this.showWaitingForRedemption();
+                        }
                     }
-                    this.showWaitingForRedemption();
                 }
             } else {
                 // Persistence disabled - check if channel points are enabled
                 if (this.config.twitch.channelPoints.enabled) {
-                    // Channel points enabled, show waiting screen
-                    if (this.config.debug.enableLogging) {
-                        console.log('🎯 [CHANNEL POINTS] Persistence disabled but channel points enabled - showing waiting screen');
+                    // Attempt to initialize EventSub first
+                    const eventSubReady = await this.twitchEventSub.initializeWithAuth();
+                    if (eventSubReady) {
+                        // Channel points enabled and ready, show waiting screen
+                        if (this.config.debug.enableLogging) {
+                            console.log('🎯 [CHANNEL POINTS] Persistence disabled but channel points enabled - showing waiting screen');
+                        }
+                        this.showWaitingForRedemption();
                     }
-                    this.showWaitingForRedemption();
+                    // If eventSubReady is false, the error screen is already shown by initializeWithAuth
                 } else if (this.config.animation.autoStart) {
                     // No channel points, use auto-start if enabled
                     if (this.config.debug.enableLogging) {
@@ -2012,6 +2291,11 @@ class CaseOpening {
         // Save winner to persistence if enabled
         if (this.winnerPersistence && this.config.persistence.enableWinnerMemory) {
             this.winnerPersistence.saveWinner(emote);
+        }
+        
+        // Always track winner in history
+        if (this.winnerHistory) {
+            this.winnerHistory.addWinner(emote);
         }
         
         this.displayWinner(emote);

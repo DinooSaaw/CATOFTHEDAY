@@ -207,6 +207,37 @@ togglePause()        // Toggle pause state
 
 Set `"enableLogging": true` in config.json to see detailed console logs.
 
+## Winner History Tracking
+
+The widget automatically tracks all winners in browser localStorage with the following information:
+- Emote name and rarity
+- Timestamp of win
+- Image URL
+
+### Available Console Commands
+
+Open your browser's developer console (F12) to use these commands:
+
+```javascript
+// Export winner history to JSON file
+exportWinnerHistory()
+
+// View statistics in console
+getWinnerStats()
+
+// Clear all history (with confirmation)
+clearWinnerHistory()
+```
+
+### History File
+
+A template `winners-history.json` file is included in the project. The actual history is stored in browser localStorage and can be exported using the `exportWinnerHistory()` command.
+
+The exported JSON contains:
+- Export timestamp
+- Statistics (total rolls, rarity distribution, emote frequency)
+- Complete history of all winners
+
 ## File Structure
 
 ```
@@ -216,6 +247,7 @@ CATOFTHEDAY/
 ├── styles.css          # Styling and animations
 ├── config.json         # Your configuration (create from example)
 ├── config.example.json # Example configuration
+├── winners-history.json # Winner history template
 ├── gamba.mp3          # Rolling sound (optional)
 ├── ding.mp3           # Win sound (optional)
 ├── .gitignore         # Git ignore file
