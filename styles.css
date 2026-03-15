@@ -91,6 +91,100 @@ body {
     color: #ff6b6b;
 }
 
+.auth-panel-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(8, 10, 15, 0.7);
+    backdrop-filter: blur(10px);
+    z-index: 2000;
+}
+
+.auth-panel {
+    position: relative;
+    width: min(640px, 100%);
+    padding: 28px;
+    border-radius: 20px;
+    background: rgba(23, 27, 36, 0.95);
+    border: 2px solid var(--accent-primary);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.auth-panel-error {
+    border-color: #ff6b6b;
+}
+
+.auth-panel-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    padding-right: 72px;
+}
+
+.auth-panel-message {
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.auth-panel-url {
+    width: 100%;
+    min-height: 120px;
+    margin-top: 18px;
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(10, 12, 18, 0.95);
+    color: var(--text-primary);
+    font: inherit;
+    resize: vertical;
+}
+
+.auth-panel-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.auth-panel-button,
+.auth-panel-close {
+    border: 0;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.auth-panel-button {
+    background: var(--accent-primary);
+    color: #071018;
+}
+
+.auth-panel-button-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.auth-panel-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-secondary);
+}
+
+.auth-panel-button:hover,
+.auth-panel-close:hover {
+    transform: translateY(-1px);
+    opacity: 0.92;
+}
+
 @keyframes slideDown {
     from {
         opacity: 0;

@@ -1562,8 +1562,9 @@ class TwitchChatManager {
 
 // ===== TWITCH OAUTH AUTHENTICATION =====
 class TwitchOAuthManager {
-    constructor(config) {
+    constructor(config, uiHost = null) {
         this.config = config;
+        this.uiHost = uiHost;
         this.clientId = config.twitch.oauth.clientId;
         this.accessToken = config.twitch.oauth.accessToken;
         this.redirectUri = "http://localhost:5173";
@@ -1645,7 +1646,7 @@ class TwitchOAuthManager {
     startAuthFlow(copyToClipboard = false) {
         if (!this.clientId) {
             console.error('🔑 [OAUTH] No client ID configured');
-            alert('Please configure your Twitch Client ID in config.json');
+            this.showClientIdRequired();
             return;
         }
 
@@ -1657,7 +1658,12 @@ class TwitchOAuthManager {
                 navigator.clipboard.writeText(authUrl).then(() => {
                     console.log('🔑 [OAUTH] Auth URL copied to clipboard!');
                     console.log('🔑 [OAUTH] URL:', authUrl);
-                    alert('Auth URL copied to clipboard! Paste it in your browser.');
+                    this.showAuthPanel(
+                        'AUTH URL COPIED',
+                        'Paste this URL in your browser to authorize Twitch.',
+                        authUrl,
+                        'info'
+                    );
                 }).catch(err => {
                     console.error('🔑 [OAUTH] Failed to copy to clipboard:', err);
                     console.log('🔑 [OAUTH] Auth URL:', authUrl);
@@ -1673,14 +1679,42 @@ class TwitchOAuthManager {
         } else {
             // Open in new window as before
             console.log('🔑 [OAUTH] Starting auth flow:', authUrl);
-            window.open(authUrl, 'twitch-auth', 'width=500,height=700');
+            const authWindow = window.open(authUrl, 'twitch-auth', 'width=500,height=700');
+            const popupBlocked = !authWindow;
+            this.showAuthPanel(
+                popupBlocked ? 'POPUP BLOCKED' : 'TWITCH AUTH STARTED',
+                popupBlocked
+                    ? 'Your browser blocked the auth popup. Use the URL below to continue manually.'
+                    : 'A Twitch auth window was opened. If you do not see it, use the URL below.',
+                authUrl,
+                popupBlocked ? 'error' : 'info'
+            );
         }
     }
 
     // Show URL in a prompt for manual copying
     showUrlPrompt(url) {
-        const message = 'Copy this URL and paste it in your browser:\n\n' + url;
-        prompt(message, url);
+        this.showAuthPanel(
+            'COPY AUTH URL',
+            'Copy this URL and paste it in your browser to continue Twitch authentication.',
+            url,
+            'info'
+        );
+    }
+
+    showClientIdRequired() {
+        this.showAuthPanel(
+            'TWITCH CLIENT ID REQUIRED',
+            'Add your Twitch Client ID to config.json first. Get one at https://dev.twitch.tv/console/apps',
+            '',
+            'error'
+        );
+    }
+
+    showAuthPanel(title, message, url = '', tone = 'info') {
+        if (this.uiHost && typeof this.uiHost.showAuthPanel === 'function') {
+            this.uiHost.showAuthPanel({ title, message, url, tone });
+        }
     }
 
     // Handle OAuth callback
@@ -1723,7 +1757,8 @@ class TwitchEventSubManager {
         this.socket = null;
         this.connected = false;
         this.sessionId = null;
-        this.oauthManager = new TwitchOAuthManager(config);
+        this.oauthManager = new TwitchOAuthManager(config, caseOpening);
+        this.registerStartTwitchAuth();
         
         if (this.config.debug.enableLogging) {
             console.log('🎁 [CHANNEL POINTS] Initializing Twitch Channel Points Manager');
@@ -1786,6 +1821,13 @@ class TwitchEventSubManager {
         if (!this.oauthManager.hasValidToken()) {
             console.log('🔑 [OAUTH] No valid token found');
             this.showAuthInstructions();
+            if (this.caseOpening) {
+                this.caseOpening.showAuthPanel({
+                    title: 'EVENTSUB AUTH REQUIRED',
+                    message: 'Use startTwitchAuth() to open Twitch auth, or startTwitchAuth(true) to copy the auth URL.',
+                    tone: 'info'
+                });
+            }
             return false;
         }
         
@@ -1815,8 +1857,17 @@ class TwitchEventSubManager {
         }
         
         console.log('🎁 [EVENTSUB] OAuth authenticated, starting EventSub connection...');
+        if (this.caseOpening && typeof this.caseOpening.hideAuthPanel === 'function') {
+            this.caseOpening.hideAuthPanel();
+        }
         this.connect();
         return true;
+    }
+
+    registerStartTwitchAuth() {
+        window.startTwitchAuth = (copyToClipboard = false) => {
+            this.oauthManager.startAuthFlow(copyToClipboard);
+        };
     }
 
     showTokenValidationError() {
@@ -1831,16 +1882,14 @@ class TwitchEventSubManager {
         // Display error in UI
         if (this.caseOpening) {
             this.caseOpening.showTokenValidationError();
+            this.caseOpening.showAuthPanel({
+                title: 'TOKEN VALIDATION FAILED',
+                message: 'Your access token is invalid or expired. Generate a new token and update config.json before reloading.',
+                tone: 'error'
+            });
         }
         
-        // Add global function for easy access
-        window.startTwitchAuth = (copyToClipboard = false) => {
-            if (!this.config.twitch.oauth.clientId) {
-                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
-                return;
-            }
-            this.oauthManager.startAuthFlow(copyToClipboard);
-        };
+        this.registerStartTwitchAuth();
     }
 
     showAuthInstructions() {
@@ -1854,14 +1903,7 @@ class TwitchEventSubManager {
         console.log('🔑 [OAUTH] Run: startTwitchAuth() or startTwitchAuth(true) to copy URL');
         console.log('🔑 [OAUTH] =================================');
         
-        // Add global function for easy access
-        window.startTwitchAuth = (copyToClipboard = false) => {
-            if (!this.config.twitch.oauth.clientId) {
-                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
-                return;
-            }
-            this.oauthManager.startAuthFlow(copyToClipboard);
-        };
+        this.registerStartTwitchAuth();
     }
 
     showUserIdMismatchError(tokenUserId, configChannelId) {
@@ -1883,16 +1925,14 @@ class TwitchEventSubManager {
                 'USER ID MISMATCH',
                 `Token is for user ${tokenUserId}, but config has channel ${configChannelId}. The broadcaster must generate their own token.`
             );
+            this.caseOpening.showAuthPanel({
+                title: 'USER ID MISMATCH',
+                message: `The token belongs to user ${tokenUserId}, but config.json is using channel ${configChannelId}. Authenticate as the broadcaster.`,
+                tone: 'error'
+            });
         }
         
-        // Add global function for easy access
-        window.startTwitchAuth = (copyToClipboard = false) => {
-            if (!this.config.twitch.oauth.clientId) {
-                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
-                return;
-            }
-            this.oauthManager.startAuthFlow(copyToClipboard);
-        };
+        this.registerStartTwitchAuth();
     }
 
     showMissingScopeError(actualScopes) {
@@ -1911,16 +1951,14 @@ class TwitchEventSubManager {
                 'MISSING SCOPE',
                 'Token lacks channel:read:redemptions scope. Please generate a new token using startTwitchAuth()'
             );
+            this.caseOpening.showAuthPanel({
+                title: 'MISSING REQUIRED SCOPE',
+                message: 'The current token does not include channel:read:redemptions. Generate a new token with that scope.',
+                tone: 'error'
+            });
         }
         
-        // Add global function for easy access
-        window.startTwitchAuth = (copyToClipboard = false) => {
-            if (!this.config.twitch.oauth.clientId) {
-                alert('Please add your Twitch Client ID to config.json first!\n\nGet one at: https://dev.twitch.tv/console/apps');
-                return;
-            }
-            this.oauthManager.startAuthFlow(copyToClipboard);
-        };
+        this.registerStartTwitchAuth();
     }
 
     connect() {
@@ -2184,6 +2222,7 @@ class CaseOpening {
         this.isOpening = false;
         this.rollerTrack = null;
         this.timeUpdateInterval = null;
+        this.authPanelOverlay = null;
         
         this.init();
     }
@@ -3125,6 +3164,95 @@ class CaseOpening {
 
         nodes.filter(Boolean).forEach(node => fragment.appendChild(node));
         parent.appendChild(fragment);
+    }
+
+    showAuthPanel({ title, message, url = '', tone = 'info' }) {
+        if (!this.config?.debug?.enableLogging) {
+            this.hideAuthPanel();
+            return;
+        }
+
+        this.hideAuthPanel();
+
+        const overlay = document.createElement('div');
+        overlay.className = 'auth-panel-overlay';
+
+        const panel = document.createElement('div');
+        panel.className = `auth-panel auth-panel-${tone}`;
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'auth-panel-close';
+        closeButton.textContent = 'Close';
+        closeButton.addEventListener('click', () => this.hideAuthPanel());
+
+        const heading = document.createElement('div');
+        heading.className = 'auth-panel-title';
+        heading.textContent = title;
+
+        const description = document.createElement('div');
+        description.className = 'auth-panel-message';
+        description.textContent = message;
+
+        panel.appendChild(closeButton);
+        panel.appendChild(heading);
+        panel.appendChild(description);
+
+        if (url) {
+            const urlField = document.createElement('textarea');
+            urlField.className = 'auth-panel-url';
+            urlField.readOnly = true;
+            urlField.value = url;
+            urlField.setAttribute('aria-label', 'Twitch authentication URL');
+            panel.appendChild(urlField);
+
+            const actions = document.createElement('div');
+            actions.className = 'auth-panel-actions';
+
+            const copyButton = document.createElement('button');
+            copyButton.type = 'button';
+            copyButton.className = 'auth-panel-button';
+            copyButton.textContent = 'Copy URL';
+            copyButton.addEventListener('click', async () => {
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(url);
+                    } else {
+                        urlField.focus();
+                        urlField.select();
+                        document.execCommand('copy');
+                    }
+                    copyButton.textContent = 'Copied';
+                } catch (error) {
+                    copyButton.textContent = 'Select URL';
+                    urlField.focus();
+                    urlField.select();
+                }
+            });
+
+            const openButton = document.createElement('button');
+            openButton.type = 'button';
+            openButton.className = 'auth-panel-button auth-panel-button-secondary';
+            openButton.textContent = 'Open URL';
+            openButton.addEventListener('click', () => {
+                window.open(url, 'twitch-auth', 'width=500,height=700');
+            });
+
+            actions.appendChild(copyButton);
+            actions.appendChild(openButton);
+            panel.appendChild(actions);
+        }
+
+        overlay.appendChild(panel);
+        document.body.appendChild(overlay);
+        this.authPanelOverlay = overlay;
+    }
+
+    hideAuthPanel() {
+        if (this.authPanelOverlay) {
+            this.authPanelOverlay.remove();
+            this.authPanelOverlay = null;
+        }
     }
 
     startTimeUpdateDisplay() {
