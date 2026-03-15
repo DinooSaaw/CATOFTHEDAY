@@ -60,14 +60,26 @@ class ConfigManager {
             if (caseContainer) {
                 const errorContainer = document.createElement('div');
                 errorContainer.className = 'final-emote-container';
-                errorContainer.innerHTML = `
-                    <div class="cat-title">Cat Of The Day</div>
-                    <div class="waiting-message error">
-                        <div class="waiting-status error">CONFIG LOAD FAILED</div>
-                        <div class="waiting-instruction">Failed to load config.json. Using default configuration.</div>
-                    </div>
-                `;
-                caseContainer.innerHTML = '';
+                const title = document.createElement('div');
+                title.className = 'cat-title';
+                title.textContent = 'Cat Of The Day';
+
+                const message = document.createElement('div');
+                message.className = 'waiting-message error';
+
+                const status = document.createElement('div');
+                status.className = 'waiting-status error';
+                status.textContent = 'CONFIG LOAD FAILED';
+
+                const instruction = document.createElement('div');
+                instruction.className = 'waiting-instruction';
+                instruction.textContent = 'Failed to load config.json. Using default configuration.';
+
+                message.appendChild(status);
+                message.appendChild(instruction);
+                errorContainer.appendChild(title);
+                errorContainer.appendChild(message);
+                caseContainer.replaceChildren();
                 caseContainer.appendChild(errorContainer);
             }
         }, 100);
@@ -2469,19 +2481,17 @@ class CaseOpening {
         if (this.config.channel.displayChannelName && this.config.channel.name !== "YourChannelName") {
             const header = document.createElement('div');
             header.className = 'channel-header visible';
-            header.innerHTML = `<div class="channel-name">${this.config.channel.name}</div>`;
+            const channelName = document.createElement('div');
+            channelName.className = 'channel-name';
+            channelName.textContent = this.config.channel.name;
+            header.appendChild(channelName);
             document.body.appendChild(header);
         }
     }
 
     showLoading() {
         const caseContainer = document.querySelector('.case-container');
-        caseContainer.innerHTML = `
-            <div class="loading-container">
-                <div class="loading-spinner"></div>
-                <div class="loading-text">Loading cat emotes...</div>
-            </div>
-        `;
+        this.replaceChildren(caseContainer, this.createLoadingContainer());
     }
 
     hideLoading() {
@@ -2489,13 +2499,9 @@ class CaseOpening {
             console.log('🔄 Hiding loading and setting up roller...');
         }
         const caseContainer = document.querySelector('.case-container');
-        caseContainer.innerHTML = `
-            <div class="roller-container">
-                <div class="selection-window"></div>
-                <div class="roller-track" id="rollerTrack"></div>
-            </div>
-        `;
-        this.rollerTrack = document.getElementById('rollerTrack');
+        const rollerContainer = this.createRollerContainer();
+        this.replaceChildren(caseContainer, rollerContainer);
+        this.rollerTrack = rollerContainer.querySelector('#rollerTrack');
         if (this.config.debug.enableLogging) {
             console.log('Roller track element:', this.rollerTrack ? '✅ Found' : '❌ Not found');
         }
@@ -2536,23 +2542,22 @@ class CaseOpening {
                 attempts++;
             } while (lastEmote && randomEmote.id === lastEmote.id && attempts < 10);
             
-            items.push(this.createEmoteTile(randomEmote));
+            items.push(this.createSafeEmoteTile(randomEmote));
             lastEmote = randomEmote;
         }
         
         if (this.config.debug.enableLogging) {
             console.log('Generated', items.length, 'roller items');
         }
-        this.rollerTrack.innerHTML = items.join('');
+        this.replaceChildren(this.rollerTrack, items);
         if (this.config.debug.enableLogging) {
             console.log('✅ Roller items inserted into DOM, children count:', this.rollerTrack.children.length);
         }
     }
 
     createEmoteTile(emote) {
+        return this.createSafeEmoteTile(emote);
         const showBorder = this.config.display.showRarityBorders ? emote.rarity : '';
-        const glowDiv = this.config.display.showGlowEffects ? '<div class="rarity-glow"></div>' : '';
-        
         if (this.config.debug.enableLogging) {
             console.log(`Creating tile for ${emote.name} with imageUrl:`, emote.imageUrl);
         }
@@ -2570,13 +2575,74 @@ class CaseOpening {
                 <img src="${emote.imageUrl}" 
                      alt="${emote.name}" 
                      class="emote-image" 
-                     onload="${debugOnLoad}"
-                     onerror="${debugOnError}"
+                     data-legacy-load="${debugOnLoad}"
+                     data-legacy-error="${debugOnError}"
                      loading="eager"
                      style="width: 80px; height: 80px; object-fit: contain; display: block; border: 3px solid ${rarityColor}; background: rgba(255,255,255,0.1);">
                 <div class="emote-name" style="color: white; font-size: 14px; text-align: center; margin-top: 8px; font-weight: bold;">${emote.name}</div>
             </div>
         `;
+    }
+
+    createSafeEmoteTile(emote) {
+        const showBorder = this.config.display.showRarityBorders ? emote.rarity : '';
+
+        if (this.config.debug.enableLogging) {
+            console.log(`Creating tile for ${emote.name} with imageUrl:`, emote.imageUrl);
+        }
+
+        const fallbackSVG = this.generateFallbackSVG(emote.name, this.getRarityColor(emote.rarity));
+        const rarityColor = this.getRarityColor(emote.rarity);
+
+        const tile = document.createElement('div');
+        tile.className = `emote-tile ${showBorder}`.trim();
+        tile.dataset.emoteId = emote.id;
+        tile.style.minWidth = '150px';
+        tile.style.minHeight = '150px';
+
+        if (this.config.display.showGlowEffects) {
+            const glow = document.createElement('div');
+            glow.className = 'rarity-glow';
+            tile.appendChild(glow);
+        }
+
+        const image = document.createElement('img');
+        image.src = emote.imageUrl;
+        image.alt = emote.name;
+        image.className = 'emote-image';
+        image.loading = 'eager';
+        image.style.width = '80px';
+        image.style.height = '80px';
+        image.style.objectFit = 'contain';
+        image.style.display = 'block';
+        image.style.border = `3px solid ${rarityColor}`;
+        image.style.background = 'rgba(255,255,255,0.1)';
+        image.addEventListener('load', () => {
+            if (this.config.debug.enableLogging) {
+                console.log('Image loaded:', emote.name);
+            }
+            image.style.border = `2px solid ${rarityColor}`;
+        });
+        image.addEventListener('error', () => {
+            if (this.config.debug.enableLogging) {
+                console.log('Image failed:', emote.name, image.src);
+            }
+            image.src = fallbackSVG;
+            image.style.border = '2px solid red';
+        }, { once: true });
+
+        const name = document.createElement('div');
+        name.className = 'emote-name';
+        name.style.color = 'white';
+        name.style.fontSize = '14px';
+        name.style.textAlign = 'center';
+        name.style.marginTop = '8px';
+        name.style.fontWeight = 'bold';
+        name.textContent = emote.name;
+
+        tile.appendChild(image);
+        tile.appendChild(name);
+        return tile;
     }
 
     generateFallbackSVG(name, color) {
@@ -2635,11 +2701,11 @@ class CaseOpening {
                 } while (lastEmote && currentEmote.id === lastEmote.id && attempts < 10);
             }
             
-            items.push(this.createEmoteTile(currentEmote));
+            items.push(this.createSafeEmoteTile(currentEmote));
             lastEmote = currentEmote;
         }
         
-        this.rollerTrack.innerHTML = items.join('');
+        this.replaceChildren(this.rollerTrack, items);
     }
 
     async openCase() {
@@ -2767,13 +2833,9 @@ class CaseOpening {
             if (this.config.debug.enableLogging) {
                 console.log('💬 [TWITCH] Recreating roller HTML structure');
             }
-            caseContainer.innerHTML = `
-                <div class="roller-container">
-                    <div class="selection-window"></div>
-                    <div class="roller-track" id="rollerTrack"></div>
-                </div>
-            `;
-            this.rollerTrack = document.getElementById('rollerTrack');
+            rollerContainer = this.createRollerContainer();
+            this.replaceChildren(caseContainer, rollerContainer);
+            this.rollerTrack = rollerContainer.querySelector('#rollerTrack');
             rollerContainer = document.querySelector('.roller-container');
         }
         
@@ -2908,22 +2970,12 @@ class CaseOpening {
     }
 
     showWaitingForRedemption() {
-        // Create a waiting display
-        const waitingContainer = document.createElement('div');
-        waitingContainer.className = 'final-emote-container';
-        
-        waitingContainer.innerHTML = `
-            <div class="cat-title">Cat Of The Day</div>
-            <div class="waiting-message">
-                <div class="waiting-status">WAITING FOR REDEMPTION</div>
-                <div class="waiting-instruction">Redeem "CAT OF THE DAY" with Channel Points</div>
-            </div>
-        `;
-        
-        // Replace the case container content
+        const waitingContainer = this.createStatusScreen(
+            'WAITING FOR REDEMPTION',
+            'Redeem "CAT OF THE DAY" with Channel Points'
+        );
         const caseContainer = document.querySelector('.case-container');
-        caseContainer.innerHTML = '';
-        caseContainer.appendChild(waitingContainer);
+        this.replaceChildren(caseContainer, waitingContainer);
         
         if (this.config.debug.enableLogging) {
             console.log('💤 [WAITING] Displayed waiting message for channel point redemption');
@@ -2938,23 +2990,10 @@ class CaseOpening {
     }
 
     showErrorMessage(errorTitle, errorMessage, autoRecover = false) {
-        // Create an error display
-        const errorContainer = document.createElement('div');
-        errorContainer.className = 'final-emote-container';
-        
-        errorContainer.innerHTML = `
-            <div class="cat-title">Cat Of The Day</div>
-            <div class="waiting-message error">
-                <div class="waiting-status error">${errorTitle}</div>
-                <div class="waiting-instruction"></div>
-            </div>
-        `;
-        
-        // Replace the case container content
+        const errorContainer = this.createStatusScreen(errorTitle, errorMessage, true);
         const caseContainer = document.querySelector('.case-container');
         if (caseContainer) {
-            caseContainer.innerHTML = '';
-            caseContainer.appendChild(errorContainer);
+            this.replaceChildren(caseContainer, errorContainer);
         }
         
         if (this.config && this.config.debug.enableLogging) {
@@ -2975,37 +3014,117 @@ class CaseOpening {
     }
 
     displayWinner(emote) {
-        // Create the final emote display
         const finalEmoteContainer = document.createElement('div');
         finalEmoteContainer.className = 'final-emote-container';
         
         const sizeClass = this.config.display.finalEmoteSize === 'large' ? 'final-emote-image' : 'final-emote-image-small';
-        const showRarity = this.config.display.showRarityBorders ? emote.rarity : '';
-        
-        // Add legendary class to title if emote is legendary
-        const titleClass = emote.rarity === 'legendary' ? 'cat-title legendary' : 'cat-title';
-        
-        // Add time remaining if persistence is enabled
-        const timeDisplay = this.winnerPersistence && this.config.persistence.showTimeRemaining 
-            ? `<div id="timeRemaining" class="time-remaining">Next roll available in: <span id="countdown">Calculating...</span></div>`
-            : '';
-        
-        finalEmoteContainer.innerHTML = `
-            <div class="${titleClass}">Cat Of The Day</div>
-            ${timeDisplay}
-            <div class="final-emote-no-box">
-                <img src="${emote.imageUrl}" 
-                     alt="${emote.name}" 
-                     class="${sizeClass}"
-                     onerror="this.onerror=null; this.src='${this.sevenTVAPI ? this.sevenTVAPI.generatePlaceholderSVG(emote.name, this.getRarityColor(emote.rarity)) : ''}';"
-                     crossorigin="anonymous">
-            </div>
-        `;
-        
-        // Replace the case container content
+
+        const title = document.createElement('div');
+        title.className = emote.rarity === 'legendary' ? 'cat-title legendary' : 'cat-title';
+        title.textContent = 'Cat Of The Day';
+        finalEmoteContainer.appendChild(title);
+
+        if (this.winnerPersistence && this.config.persistence.showTimeRemaining) {
+            const timeRemaining = document.createElement('div');
+            timeRemaining.id = 'timeRemaining';
+            timeRemaining.className = 'time-remaining';
+            timeRemaining.appendChild(document.createTextNode('Next roll available in: '));
+
+            const countdown = document.createElement('span');
+            countdown.id = 'countdown';
+            countdown.textContent = 'Calculating...';
+            timeRemaining.appendChild(countdown);
+            finalEmoteContainer.appendChild(timeRemaining);
+        }
+
+        const emoteWrapper = document.createElement('div');
+        emoteWrapper.className = 'final-emote-no-box';
+
+        const image = document.createElement('img');
+        image.src = emote.imageUrl;
+        image.alt = emote.name;
+        image.className = sizeClass;
+        image.crossOrigin = 'anonymous';
+        image.addEventListener('error', () => {
+            if (this.sevenTVAPI) {
+                image.src = this.sevenTVAPI.generatePlaceholderSVG(emote.name, this.getRarityColor(emote.rarity));
+            }
+        }, { once: true });
+
+        emoteWrapper.appendChild(image);
+        finalEmoteContainer.appendChild(emoteWrapper);
+
         const caseContainer = document.querySelector('.case-container');
-        caseContainer.innerHTML = '';
-        caseContainer.appendChild(finalEmoteContainer);
+        this.replaceChildren(caseContainer, finalEmoteContainer);
+    }
+
+    createLoadingContainer() {
+        const loadingContainer = document.createElement('div');
+        loadingContainer.className = 'loading-container';
+
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+
+        const text = document.createElement('div');
+        text.className = 'loading-text';
+        text.textContent = 'Loading cat emotes...';
+
+        loadingContainer.appendChild(spinner);
+        loadingContainer.appendChild(text);
+        return loadingContainer;
+    }
+
+    createRollerContainer() {
+        const rollerContainer = document.createElement('div');
+        rollerContainer.className = 'roller-container';
+
+        const selectionWindow = document.createElement('div');
+        selectionWindow.className = 'selection-window';
+
+        const rollerTrack = document.createElement('div');
+        rollerTrack.className = 'roller-track';
+        rollerTrack.id = 'rollerTrack';
+
+        rollerContainer.appendChild(selectionWindow);
+        rollerContainer.appendChild(rollerTrack);
+        return rollerContainer;
+    }
+
+    createStatusScreen(statusText, instructionText, isError = false) {
+        const container = document.createElement('div');
+        container.className = 'final-emote-container';
+
+        const title = document.createElement('div');
+        title.className = 'cat-title';
+        title.textContent = 'Cat Of The Day';
+
+        const message = document.createElement('div');
+        message.className = isError ? 'waiting-message error' : 'waiting-message';
+
+        const status = document.createElement('div');
+        status.className = isError ? 'waiting-status error' : 'waiting-status';
+        status.textContent = statusText;
+
+        const instruction = document.createElement('div');
+        instruction.className = 'waiting-instruction';
+        instruction.textContent = instructionText;
+
+        message.appendChild(status);
+        message.appendChild(instruction);
+        container.appendChild(title);
+        container.appendChild(message);
+        return container;
+    }
+
+    replaceChildren(parent, children) {
+        if (!parent) return;
+
+        parent.replaceChildren();
+        const nodes = Array.isArray(children) ? children : [children];
+        const fragment = document.createDocumentFragment();
+
+        nodes.filter(Boolean).forEach(node => fragment.appendChild(node));
+        parent.appendChild(fragment);
     }
 
     startTimeUpdateDisplay() {
