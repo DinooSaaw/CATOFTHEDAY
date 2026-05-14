@@ -9,6 +9,10 @@ class ConfigManager {
             const response = await fetch('./config.json');
             if (!response.ok) throw new Error('Failed to load config');
             this.config = await response.json();
+            
+            // Apply profile settings
+            this.applyProfile();
+            
             this.applyTheme();
             return this.config;
         } catch (error) {
@@ -18,6 +22,19 @@ class ConfigManager {
             this.showConfigError();
             return this.getDefaultConfig();
         }
+    }
+
+    applyProfile() {
+        if (!this.config.profiles || !this.config.currentProfile) return;
+        const profile = this.config.profiles[this.config.currentProfile];
+        if (!profile) return;
+        
+        // Apply profile settings
+        if (profile.channelID) this.config.emotes.channelID = profile.channelID;
+        if (profile.actualRewardId) this.config.twitch.channelPoints.actualRewardId = profile.actualRewardId;
+        if (profile.specificRewardId) this.config.twitch.channelPoints.specificRewardId = profile.specificRewardId;
+        if (profile.accessToken !== undefined) this.config.twitch.oauth.accessToken = profile.accessToken;
+        if (profile.channelName) this.config.channel.name = profile.channelName;
     }
 
     applyTheme() {
